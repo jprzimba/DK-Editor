@@ -26,6 +26,9 @@ for example `DKEditor.exe rom.smc 0x2F` opens Slipslide Ride.
 
 - **Left panel** - ROM information, search box and grouped level list.
 - **Centre** - level canvas.
+- **Item bar** - a Lunar Magic style strip of the game's collectables and
+  barrels (bananas, balloons, KONG letters, DK/TNT/star/steel barrels, coins,
+  cogs, animal tokens). Hover an icon to read its name; click to select it.
 - **Right panel** - tools, selected tile, tile palette, level information and
   game notes.
 - **Bottom** - status line, cursor tile, modified state and zoom.

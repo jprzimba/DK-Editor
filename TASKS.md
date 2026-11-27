@@ -35,6 +35,8 @@ with the code.
 - [x] Paint, pick and erase tools, horizontal/vertical flips.
 - [x] Lunar Magic style rectangular area selection with fill, clear, copy and
       paste, plus `Ctrl+A`, `Ctrl+C`, `Ctrl+V`, `Delete` and `Esc` shortcuts.
+- [x] Item bar under the toolbar with the collectables of each game rendered as
+      icons (bananas, balloons, KONG letters, barrels, coins, cogs, tokens).
 - [x] No tile is pre-selected when a level opens; paint waits for a palette pick.
 - [x] Fit toggles between the whole level and the previous zoom.
 - [x] Undo/redo snapshots per level.

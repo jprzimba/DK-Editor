@@ -33,6 +33,7 @@ public:
 private:
     void drawMenuBar();
     void drawToolbar();
+    void drawItemBar();
     void drawLevelPanel();
     void drawCanvas();
     void drawToolPanel();
@@ -132,6 +133,7 @@ private:
     int cursorX_ = -1;
     int cursorY_ = -1;
     std::string lastRomDir_;
+    int selectedItem_ = -1;
 };
 
 } // namespace dk

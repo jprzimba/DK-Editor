@@ -572,6 +572,241 @@ void EditorApp::drawToolbar() {
     ImGui::PopStyleVar();
 }
 
+namespace {
+// Item toolbar, Lunar Magic style.  Icons are drawn with the ImGui draw list so
+// every game gets a consistent strip; the lists follow items.md.
+enum class ItemIcon {
+    Banana, Bunch, BalloonRed, BalloonGreen, BalloonBlue, KongLetter,
+    BarrelDk, BarrelTnt, BarrelStar, BarrelSteel,
+    BananaCoin, DkCoin, Kremkoin, BearCoin, BonusCoin, Cog, AnimalToken,
+};
+
+struct ItemDef {
+    ItemIcon icon;
+    const char* name;
+};
+
+const ItemDef kDkc1Items[] = {
+    {ItemIcon::Banana, "Banana"},
+    {ItemIcon::Bunch, "Banana bunch"},
+    {ItemIcon::BalloonRed, "Red balloon (1 life)"},
+    {ItemIcon::BalloonGreen, "Green balloon (2 lives)"},
+    {ItemIcon::BalloonBlue, "Blue balloon (3 lives)"},
+    {ItemIcon::KongLetter, "KONG letter"},
+    {ItemIcon::BarrelDk, "DK barrel"},
+    {ItemIcon::BarrelTnt, "TNT barrel"},
+    {ItemIcon::BarrelStar, "Star barrel"},
+    {ItemIcon::BarrelSteel, "Steel barrel"},
+    {ItemIcon::AnimalToken, "Animal token"},
+};
+
+const ItemDef kDkc2Items[] = {
+    {ItemIcon::Banana, "Banana"},
+    {ItemIcon::Bunch, "Banana bunch"},
+    {ItemIcon::BalloonRed, "Red balloon (1 life)"},
+    {ItemIcon::BalloonGreen, "Green balloon (2 lives)"},
+    {ItemIcon::BalloonBlue, "Blue balloon (3 lives)"},
+    {ItemIcon::KongLetter, "KONG letter"},
+    {ItemIcon::BarrelDk, "DK barrel"},
+    {ItemIcon::BarrelTnt, "TNT barrel"},
+    {ItemIcon::BarrelStar, "Star barrel"},
+    {ItemIcon::BarrelSteel, "Steel barrel"},
+    {ItemIcon::BananaCoin, "Banana coin"},
+    {ItemIcon::DkCoin, "DK coin"},
+    {ItemIcon::Kremkoin, "Kremkoin"},
+};
+
+const ItemDef kDkc3Items[] = {
+    {ItemIcon::Banana, "Banana"},
+    {ItemIcon::Bunch, "Banana bunch"},
+    {ItemIcon::BalloonRed, "Red balloon (1 life)"},
+    {ItemIcon::BalloonGreen, "Green balloon (2 lives)"},
+    {ItemIcon::BalloonBlue, "Blue balloon (3 lives)"},
+    {ItemIcon::KongLetter, "KONG letter"},
+    {ItemIcon::BarrelDk, "DK barrel"},
+    {ItemIcon::BarrelTnt, "TNT barrel"},
+    {ItemIcon::BarrelStar, "Star barrel"},
+    {ItemIcon::BarrelSteel, "Steel barrel"},
+    {ItemIcon::DkCoin, "DK coin"},
+    {ItemIcon::BearCoin, "Bear coin"},
+    {ItemIcon::BonusCoin, "Bonus coin"},
+    {ItemIcon::Cog, "Cog"},
+};
+
+void drawItemIcon(ImDrawList* dl, ImVec2 c, float s, ItemIcon icon, bool selected) {
+    const ImU32 outline = selected ? IM_COL32(90, 200, 255, 255) : IM_COL32(90, 90, 100, 255);
+    auto barrel = [&](ImU32 body, const char* label, ImU32 labelCol) {
+        const ImVec2 a(c.x - s * 0.42f, c.y - s * 0.55f);
+        const ImVec2 b(c.x + s * 0.42f, c.y + s * 0.55f);
+        dl->AddRectFilled(a, b, body, s * 0.18f);
+        dl->AddRect(a, b, outline, s * 0.18f, 0, 1.5f);
+        dl->AddLine(ImVec2(a.x, c.y - s * 0.22f), ImVec2(b.x, c.y - s * 0.22f),
+                    IM_COL32(30, 20, 10, 200), 1.5f);
+        dl->AddLine(ImVec2(a.x, c.y + s * 0.22f), ImVec2(b.x, c.y + s * 0.22f),
+                    IM_COL32(30, 20, 10, 200), 1.5f);
+        if (label) {
+            const ImVec2 t = ImGui::CalcTextSize(label);
+            dl->AddText(ImVec2(c.x - t.x * 0.5f, c.y - t.y * 0.5f), labelCol, label);
+        }
+    };
+    auto coin = [&](ImU32 rim, ImU32 face, const char* label) {
+        dl->AddCircleFilled(c, s * 0.52f, rim, 20);
+        dl->AddCircleFilled(c, s * 0.40f, face, 20);
+        if (label) {
+            const ImVec2 t = ImGui::CalcTextSize(label);
+            dl->AddText(ImVec2(c.x - t.x * 0.5f, c.y - t.y * 0.5f),
+                        IM_COL32(40, 30, 10, 255), label);
+        }
+    };
+    switch (icon) {
+    case ItemIcon::Banana: {
+        dl->PathClear();
+        dl->PathArcTo(ImVec2(c.x, c.y + s * 0.32f), s * 0.42f, -2.7f, -0.4f, 16);
+        dl->PathStroke(IM_COL32(248, 210, 40, 255), 0, s * 0.26f);
+        dl->AddCircleFilled(ImVec2(c.x + s * 0.34f, c.y - s * 0.16f), s * 0.08f,
+                            IM_COL32(110, 80, 20, 255));
+        break;
+    }
+    case ItemIcon::Bunch: {
+        for (int i = 0; i < 3; ++i) {
+            const float dx = (i - 1) * s * 0.24f;
+            dl->PathClear();
+            dl->PathArcTo(ImVec2(c.x + dx, c.y + s * 0.22f), s * 0.28f, -2.7f, -0.5f, 12);
+            dl->PathStroke(IM_COL32(248, 210, 40, 255), 0, s * 0.16f);
+        }
+        break;
+    }
+    case ItemIcon::BalloonRed:
+    case ItemIcon::BalloonGreen:
+    case ItemIcon::BalloonBlue: {
+        const ImU32 col = icon == ItemIcon::BalloonRed ? IM_COL32(230, 50, 50, 255)
+                          : icon == ItemIcon::BalloonGreen ? IM_COL32(60, 190, 80, 255)
+                                                           : IM_COL32(60, 130, 235, 255);
+        dl->AddCircleFilled(ImVec2(c.x, c.y - s * 0.12f), s * 0.38f, col, 20);
+        dl->AddCircle(ImVec2(c.x, c.y - s * 0.12f), s * 0.38f, outline, 20, 1.2f);
+        dl->AddTriangleFilled(ImVec2(c.x - s * 0.09f, c.y + s * 0.22f),
+                              ImVec2(c.x + s * 0.09f, c.y + s * 0.22f),
+                              ImVec2(c.x, c.y + s * 0.34f), col);
+        dl->AddLine(ImVec2(c.x, c.y + s * 0.34f), ImVec2(c.x, c.y + s * 0.56f),
+                    IM_COL32(220, 220, 220, 200), 1.2f);
+        break;
+    }
+    case ItemIcon::KongLetter: {
+        const char* letters[4] = {"K", "O", "N", "G"};
+        for (int i = 0; i < 4; ++i) {
+            const ImVec2 p(c.x - s * 0.42f + i * s * 0.28f, c.y - s * 0.34f);
+            dl->AddText(p, IM_COL32(250, 220, 80, 255), letters[i]);
+        }
+        break;
+    }
+    case ItemIcon::BarrelDk:
+        barrel(IM_COL32(180, 120, 60, 255), "DK", IM_COL32(250, 240, 210, 255));
+        break;
+    case ItemIcon::BarrelTnt:
+        barrel(IM_COL32(120, 120, 128, 255), "TNT", IM_COL32(250, 230, 90, 255));
+        break;
+    case ItemIcon::BarrelStar:
+        barrel(IM_COL32(120, 90, 60, 255), "*", IM_COL32(250, 230, 90, 255));
+        break;
+    case ItemIcon::BarrelSteel:
+        barrel(IM_COL32(150, 155, 165, 255), nullptr, 0);
+        break;
+    case ItemIcon::BananaCoin:
+        coin(IM_COL32(230, 190, 60, 255), IM_COL32(250, 225, 110, 255), "B");
+        break;
+    case ItemIcon::DkCoin:
+        coin(IM_COL32(200, 170, 60, 255), IM_COL32(245, 215, 90, 255), "DK");
+        break;
+    case ItemIcon::Kremkoin:
+        coin(IM_COL32(200, 160, 40, 255), IM_COL32(240, 200, 70, 255), "K");
+        break;
+    case ItemIcon::BearCoin:
+        coin(IM_COL32(180, 140, 60, 255), IM_COL32(230, 190, 90, 255), "B");
+        break;
+    case ItemIcon::BonusCoin:
+        coin(IM_COL32(170, 120, 200, 255), IM_COL32(210, 160, 240, 255), "B");
+        break;
+    case ItemIcon::Cog: {
+        dl->AddCircleFilled(c, s * 0.30f, IM_COL32(180, 180, 190, 255), 16);
+        dl->AddCircle(c, s * 0.30f, outline, 16, 1.2f);
+        for (int i = 0; i < 8; ++i) {
+            const float a = i * 3.14159265f / 4.0f;
+            const ImVec2 p(c.x + std::cos(a) * s * 0.40f, c.y + std::sin(a) * s * 0.40f);
+            dl->AddCircleFilled(p, s * 0.10f, IM_COL32(180, 180, 190, 255), 8);
+        }
+        dl->AddCircleFilled(c, s * 0.10f, IM_COL32(60, 60, 70, 255), 10);
+        break;
+    }
+    case ItemIcon::AnimalToken:
+        dl->AddRectFilled(ImVec2(c.x - s * 0.38f, c.y - s * 0.38f),
+                          ImVec2(c.x + s * 0.38f, c.y + s * 0.38f),
+                          IM_COL32(120, 200, 120, 255), s * 0.16f);
+        dl->AddRect(ImVec2(c.x - s * 0.38f, c.y - s * 0.38f),
+                    ImVec2(c.x + s * 0.38f, c.y + s * 0.38f), outline, s * 0.16f, 0, 1.2f);
+        dl->AddCircleFilled(ImVec2(c.x, c.y), s * 0.16f, IM_COL32(40, 90, 40, 255), 12);
+        break;
+    }
+}
+
+std::vector<ItemDef> itemsForGame(GameKind kind) {
+    switch (kind) {
+    case GameKind::Dkc1:
+        return std::vector<ItemDef>(kDkc1Items,
+                                    kDkc1Items + sizeof(kDkc1Items) / sizeof(kDkc1Items[0]));
+    case GameKind::Dkc2:
+        return std::vector<ItemDef>(kDkc2Items,
+                                    kDkc2Items + sizeof(kDkc2Items) / sizeof(kDkc2Items[0]));
+    case GameKind::Dkc3:
+        return std::vector<ItemDef>(kDkc3Items,
+                                    kDkc3Items + sizeof(kDkc3Items) / sizeof(kDkc3Items[0]));
+    }
+    return {};
+}
+} // namespace
+
+void EditorApp::drawItemBar() {
+    if (!game_) return;
+    const std::vector<ItemDef> items = itemsForGame(rom_.game);
+    if (items.empty()) return;
+
+    ImGui::BeginChild("item-bar", ImVec2(0, 46), ImGuiChildFlags_Borders,
+                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_HorizontalScrollbar);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
+    const ImVec2 origin = ImGui::GetCursorScreenPos();
+    const float cell = 40.0f;
+    const float height = 38.0f;
+
+    ImGui::InvisibleButton("##itemstrip", ImVec2(cell * items.size(), height));
+    const bool hovered = ImGui::IsItemHovered();
+    const ImVec2 mouse = ImGui::GetIO().MousePos;
+    int hover = -1;
+    if (hovered) {
+        const int idx = static_cast<int>((mouse.x - origin.x) / cell);
+        if (idx >= 0 && idx < static_cast<int>(items.size())) hover = idx;
+    }
+    if (hover >= 0 && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+        selectedItem_ = hover;
+        setStatus(std::string("Item selected: ") + items[hover].name +
+                  " (object placement is the next milestone).");
+    }
+
+    for (int i = 0; i < static_cast<int>(items.size()); ++i) {
+        const ImVec2 a(origin.x + i * cell + 2, origin.y + 2);
+        const ImVec2 b(a.x + cell - 4, a.y + height - 4);
+        const bool sel = (i == selectedItem_);
+        const bool hov = (i == hover);
+        dl->AddRectFilled(a, b, sel ? IM_COL32(70, 110, 170, 120)
+                                    : (hov ? IM_COL32(90, 90, 100, 90) : IM_COL32(32, 34, 40, 180)),
+                          4.0f);
+        dl->AddRect(a, b, sel ? IM_COL32(90, 200, 255, 255) : IM_COL32(70, 72, 80, 255),
+                    4.0f, 0, sel ? 2.0f : 1.0f);
+        drawItemIcon(dl, ImVec2((a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f), cell * 0.78f,
+                     items[i].icon, sel);
+        if (hov) ImGui::SetTooltip("%s", items[i].name);
+    }
+    ImGui::EndChild();
+}
+
 void EditorApp::drawLevelPanel() {
     if (!game_) {
         ImGui::TextWrapped("Open a Donkey Kong Country 1, 2 or 3 ROM to start.");
@@ -1167,6 +1402,7 @@ void EditorApp::draw() {
     ImGui::PopStyleVar();
 
     drawToolbar();
+    drawItemBar();
     const float statusH = ImGui::GetTextLineHeightWithSpacing() + 4;
     const float contentH = ImGui::GetContentRegionAvail().y - statusH;
     const float leftW = 300.0f;

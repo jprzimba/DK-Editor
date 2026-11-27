@@ -108,6 +108,7 @@ repository.
 
 | Action | Input |
 | --- | --- |
+| Pick an item | Click its icon in the item bar under the toolbar |
 | Paint selected tile | Left click / drag (after picking a tile) |
 | Erase tile | Right click / drag, or the Erase tool |
 | Pick tile under cursor | Alt + left click, or the Pick tool |
