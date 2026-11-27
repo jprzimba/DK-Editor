@@ -13,9 +13,26 @@ checksum.
 
 | Game | Open / detect | Level list | Terrain rendering | Terrain editing | Save ROM |
 | --- | --- | --- | --- | --- | --- |
-| DKC1 (US v1.2) | Yes | 65 stages and sub-rooms | Original tilesets, metatiles and palettes | Paint, pick, erase, flip, undo/redo | In-place |
-| DKC2 (US v1.1) | Yes | 192 stages and sub-rooms | Original tilesets, map chips and palettes | Paint, pick, erase, flip, undo/redo | Recompress + relocate |
+| DKC1 (US v1.2) | Yes | 65 stages and sub-rooms | Original tilesets, metatiles and palettes + themed sky | Paint, pick, erase, flip, undo/redo | In-place |
+| DKC2 (US v1.1) | Yes | 192 stages and sub-rooms | Original tilesets, map chips and palettes + Layer 2 backgrounds | Paint, pick, erase, flip, undo/redo | Recompress + relocate |
 | DKC3 (US v1.0) | Yes | 132 stages and sub-rooms | Not yet | Stage settings / entrances | Direct |
+
+### Backgrounds
+
+- DKC2 renders the real Layer 2 scenery behind the terrain: the Ship Deck ocean
+  and sky, Ship Mast clouds, Haunted Hall interior, ship-hold walls, brambles,
+  honeycomb cells, forest trees, the carnival and the lava cave. Each theme is
+  decoded from its Big Data tileset and 8x8 tilemap; index-0 pixels stay
+  transparent so the sky gradient shows through.
+- Very tall stages repeat the backdrop instead of stretching it, and the
+  backdrop is dimmed slightly so the editable terrain stays readable.
+- The scenery is decorative and read-only: painting, picking and erasing only
+  ever touch the terrain tilemap, and a saved ROM keeps its original background
+  data. Use the **Background** checkbox (or **View → Background scenery**) to
+  hide it and work on terrain alone.
+- DKC1 currently draws a themed sky gradient per level type (jungle, caves,
+  snow, underwater, factories, and so on). Its Layer 3 artwork is still on the
+  roadmap.
 
 ### DKC1
 

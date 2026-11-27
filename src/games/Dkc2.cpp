@@ -26,6 +26,7 @@ struct Dkc2Config {
     int mapId = 0;
     int graphics = 0;
     int routine1 = 0;
+    int routine2 = 0;
     std::size_t palette = 0;
     std::string note;
 };
@@ -135,6 +136,7 @@ bool parseConfig(const Rom& rom, int id, Dkc2Config& cfg, std::string& error) {
         return true;
     }
     cfg.routine1 = rom.word(cfg.style);
+    cfg.routine2 = rom.word(cfg.style + 2);
     cfg.palette = rom.word(cfg.style + 6);
     cfg.graphics = rom.byte(cfg.style + 13);
     cfg.mapId = rom.byte(cfg.style + 18);
@@ -227,6 +229,75 @@ Palette loadLevelPalette(const Rom& rom, std::size_t base, int routine1) {
         }
     }
     return pal;
+}
+
+struct Dkc2BgDef {
+    u32 gfx;
+    u32 tilemap;
+    int bpp;
+    bool transparentZero;
+};
+
+// DKC2 background (Layer 2) assets, addressed by file offset.
+const Dkc2BgDef kBgShipDeck{0x29FDB3, 0x07FCB8, 4, false};   // ocean + sky
+const Dkc2BgDef kBgShipMast{0x2A121C, 0x0AFABE, 4, false};   // clouds
+const Dkc2BgDef kBgHaunted{0x295221, 0x0CFEDF, 4, false};    // ghost ship hall
+const Dkc2BgDef kBgShipHold{0x29A905, 0x09FF37, 4, false};   // hull back wall
+const Dkc2BgDef kBgBrambles{0x2AB6F0, 0x380000, 4, true};    // bramble silhouette
+const Dkc2BgDef kBgHive{0x16F791, 0x14FC2D, 4, false};       // honeycomb cells
+const Dkc2BgDef kBgForest{0x3B6FC0, 0x15FEB3, 4, true};      // forest trees
+const Dkc2BgDef kBgCoaster{0x2A23D4, 0x0FFFD9, 4, false};    // carnival + track
+const Dkc2BgDef kBgMine{0x2B2B84, 0x19F7C9, 2, true};        // cave sparkles
+const Dkc2BgDef kBgRock{0x295623, 0x1CFA5E, 4, false};       // lava rock cave
+
+const Dkc2BgDef* backgroundForLevel(int levelId) {
+    switch (levelId) {
+    case 0x03: case 0x04: case 0x05:      // Pirate Panic / Gangplank Galley / Rattle Battle
+        return &kBgShipDeck;
+    case 0x09: case 0x0B: case 0x0C: case 0x0D: case 0x1A: // mast-climbing stages
+        return &kBgShipMast;
+    case 0x10:                            // Haunted Hall
+        return &kBgHaunted;
+    case 0x0A: case 0x15:                 // Slime Climb / Lockjaw's Locker
+        return &kBgShipHold;
+    case 0x02: case 0x13:                 // Rambi Rumble / Parrot Chute Panic
+        return &kBgBrambles;
+    case 0x11:                            // Hornet Hole
+        return &kBgHive;
+    case 0x17: case 0x18: case 0x19:      // Web Woods / Gusty Glade / Ghostly Grove
+        return &kBgForest;
+    case 0x0E: case 0x0F:                 // Target Terror / Rickety Race
+        return &kBgCoaster;
+    case 0x07: case 0x08: case 0x14: case 0x16: // volcano and lava stages
+        return &kBgRock;
+    default:
+        return nullptr;
+    }
+}
+
+bool loadDkc2Background(const Rom& rom, int levelId, const Palette& palette,
+                        LoadedLevel& out) {
+    const Dkc2BgDef* def = backgroundForLevel(levelId);
+    if (!def) return false;
+
+    std::string error;
+    std::vector<u8> gfxData;
+    std::vector<u8> mapData;
+    if (!decompress(DkFormat::BigData, rom.data, def->gfx, gfxData, error)) return false;
+    if (!decompress(DkFormat::BigData, rom.data, def->tilemap, mapData, error)) return false;
+
+    constexpr int kTilesW = 32;
+    const int tilesH = static_cast<int>(mapData.size() / 64);
+    if (tilesH < 4) return false;
+    const Charset chars = decodeCharset(gfxData, def->bpp);
+    if (chars.chars.empty()) return false;
+
+    renderBackgroundTilemap(out.bgImage, kTilesW, tilesH, mapData, chars, palette,
+                            def->transparentZero);
+    if (out.bgImage.empty()) return false;
+    out.bgWidth = kTilesW * 8;
+    out.bgHeight = tilesH * 8;
+    return true;
 }
 
 } // namespace
@@ -456,8 +527,19 @@ bool Dkc2Game::loadLevel(Rom& rom, int levelId, LoadedLevel& out, std::string& e
     ctx->fullBuffer = std::move(tmBuffer);
     out.context = ctx;
 
+    Color bgTop = out.palette[0][1];
+    if (bgTop.a == 0 || (static_cast<int>(bgTop.r) + bgTop.g + bgTop.b) < 24) {
+        bgTop = Color{18, 30, 55, 255};
+    }
+    out.background = bgTop;
+    out.backgroundBottom = Color{static_cast<u8>(bgTop.r * 2 / 5),
+                                static_cast<u8>(bgTop.g * 2 / 5),
+                                static_cast<u8>(bgTop.b * 2 / 5), 255};
+    loadDkc2Background(rom, levelId, out.palette, out);
+
     buildLevelImage(out.image, out.width, out.height, out.tiles, out.indexMask,
-                    out.metas, out.charset, out.palette, out.background);
+                    out.metas, out.charset, out.palette, out.background,
+                    out.backgroundBottom, out.bgImage, out.bgWidth, out.bgHeight);
     return true;
 }
 

@@ -33,6 +33,12 @@ for example `DKEditor.exe rom.smc 0x2F` opens Slipslide Ride.
 Levels that cannot be edited in this build are shown in grey. Hover them to read
 the reason.
 
+The canvas shows the level's own graphics with the scenery drawn behind them.
+DKC2 stages use their real Layer 2 background; DKC1 stages use a sky gradient
+matching the level type. The scenery is decoration only: it is never edited or
+saved over, and the **Background** checkbox hides it when you want to see the
+terrain map alone.
+
 ## Navigating the level
 
 | Action | Input |
@@ -42,6 +48,7 @@ the reason.
 | Pan | Middle-drag, or Space + left-drag |
 | Fit the whole level | `F` or **Fit** |
 | Toggle the 32x32 grid | **Grid** checkbox |
+| Toggle the scenery | **Background** checkbox |
 | Hover a tile | Move the pointer; the status line shows tile X/Y and value |
 
 The zoom range is 5% to 400%. When a level is wider or taller than the canvas,

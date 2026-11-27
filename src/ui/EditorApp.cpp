@@ -200,7 +200,9 @@ void EditorApp::rebuildLevelImage() {
     if (!level_.valid()) return;
     buildLevelImage(level_.image, level_.width, level_.height, level_.tiles,
                     level_.indexMask, level_.metas, level_.charset, level_.palette,
-                    level_.background);
+                    level_.background, level_.backgroundBottom, level_.bgImage,
+                    showBackground_ ? level_.bgWidth : 0,
+                    showBackground_ ? level_.bgHeight : 0);
     uploadLevelTexture();
 }
 
@@ -303,14 +305,14 @@ void EditorApp::paintAt(int tx, int ty) {
     level_.tiles[index] = value;
     strokeChanged_ = true;
 
-    // Repaint only the affected 32x32 area and upload it.
+    // Repaint only the affected 32x32 area and upload it.  The scenery layer is
+    // rebuilt from its own data, so it is never modified by terrain edits.
     const int pw = level_.pixelWidth();
-    for (int y = 0; y < 32; ++y) {
-        for (int x = 0; x < 32; ++x) {
-            const std::size_t o = static_cast<std::size_t>(ty * 32 + y) * pw + tx * 32 + x;
-            level_.image[o] = packColor(level_.background);
-        }
-    }
+    const int ph = level_.pixelHeight();
+    fillLevelBackground(level_.image, pw, pw, ph, tx * 32, ty * 32, 32, 32,
+                        level_.background, level_.backgroundBottom, level_.bgImage,
+                        showBackground_ ? level_.bgWidth : 0,
+                        showBackground_ ? level_.bgHeight : 0);
     const int mi = value & level_.indexMask;
     if (mi >= 0 && mi < static_cast<int>(level_.metas.size())) {
         renderMetatile(level_.image, pw, tx * 32, ty * 32, level_.metas[mi],
@@ -327,12 +329,11 @@ void EditorApp::eraseAt(int tx, int ty) {
     level_.tiles[index] = 0;
     strokeChanged_ = true;
     const int pw = level_.pixelWidth();
-    for (int y = 0; y < 32; ++y) {
-        for (int x = 0; x < 32; ++x) {
-            const std::size_t o = static_cast<std::size_t>(ty * 32 + y) * pw + tx * 32 + x;
-            level_.image[o] = packColor(level_.background);
-        }
-    }
+    const int ph = level_.pixelHeight();
+    fillLevelBackground(level_.image, pw, pw, ph, tx * 32, ty * 32, 32, 32,
+                        level_.background, level_.backgroundBottom, level_.bgImage,
+                        showBackground_ ? level_.bgWidth : 0,
+                        showBackground_ ? level_.bgHeight : 0);
     levelTex_.uploadRegion(context_, level_.image, pw, tx * 32, ty * 32, 32, 32);
 }
 
@@ -407,6 +408,7 @@ void EditorApp::drawMenuBar() {
     }
     if (ImGui::BeginMenu("View")) {
         ImGui::MenuItem("Tile grid", nullptr, &showGrid_);
+        ImGui::MenuItem("Background scenery", nullptr, &showBackground_);
         if (ImGui::MenuItem("Fit level to window", "F")) { autoFitFrames_ = 2; fitWhole_ = true; }
         ImGui::EndMenu();
     }
@@ -436,6 +438,10 @@ void EditorApp::drawToolbar() {
     ImGui::EndDisabled();
     ImGui::SameLine();
     ImGui::Checkbox("Grid", &showGrid_);
+    ImGui::SameLine();
+    if (ImGui::Checkbox("Background", &showBackground_)) {
+        rebuildLevelImage();
+    }
     ImGui::SameLine();
     if (ImGui::Button("Fit")) { autoFitFrames_ = 2; fitWhole_ = true; }
     ImGui::SameLine();
@@ -810,6 +816,9 @@ void EditorApp::drawToolPanel() {
                                 level_.pixelWidth(), level_.pixelHeight());
             ImGui::TextDisabled("%s  |  %d metatiles", level_.info.group.c_str(),
                                 static_cast<int>(level_.metas.size()));
+            if (!level_.bgImage.empty()) {
+                ImGui::TextDisabled("Background: read-only scenery");
+            }
             if (cursorX_ >= 0 && cursorY_ >= 0) {
                 const u16 v = level_.tiles[static_cast<std::size_t>(cursorY_) * level_.width + cursorX_];
                 ImGui::Text("Cursor: %d,%d  tile %03X", cursorX_, cursorY_, v & level_.indexMask);

@@ -82,6 +82,7 @@ private:
     bool flipV_ = false;
     int selectedMeta_ = 0;
     bool showGrid_ = true;
+    bool showBackground_ = true;
     bool showCollision_ = false; // reserved
     float zoom_ = 0.5f;
     int autoFitFrames_ = 2;

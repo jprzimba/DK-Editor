@@ -128,9 +128,50 @@ void testDkc2(const std::string& path) {
     }
     check(level.width == 223 && level.height == 16, "223x16 dimensions");
     check(!level.metas.empty() && !level.charset.chars.empty(), "map chips + tileset");
+    check(!level.bgImage.empty() && level.bgWidth == 256 && level.bgHeight > 0,
+          "Pirate Panic background decoded");
     std::size_t nonBg = 0;
     for (dk::u32 p : level.image) nonBg += (p != dk::packColor(level.background));
     check(nonBg > 1000, "rendered image contains pixels");
+
+    // Repainting a single edited cell must reproduce a full rebuild exactly, so
+    // terrain edits never damage the scenery drawn behind them.
+    {
+        int cellX = -1, cellY = -1;
+        for (int y = 0; y < level.height && cellX < 0; ++y) {
+            for (int x = 0; x < level.width; ++x) {
+                if ((level.tiles[static_cast<std::size_t>(y) * level.width + x] & 0x0FFF) != 0) {
+                    cellX = x;
+                    cellY = y;
+                    break;
+                }
+            }
+        }
+        check(cellX >= 0, "found a terrain cell to repaint");
+        if (cellX >= 0) {
+            std::vector<dk::u16> cleared = level.tiles;
+            cleared[static_cast<std::size_t>(cellY) * level.width + cellX] = 0;
+            std::vector<dk::u32> rebuilt;
+            dk::buildLevelImage(rebuilt, level.width, level.height, cleared, level.indexMask,
+                                level.metas, level.charset, level.palette, level.background,
+                                level.backgroundBottom, level.bgImage, level.bgWidth,
+                                level.bgHeight);
+            dk::fillLevelBackground(level.image, level.pixelWidth(), level.pixelWidth(),
+                                    level.pixelHeight(), cellX * 32, cellY * 32, 32, 32,
+                                    level.background, level.backgroundBottom, level.bgImage,
+                                    level.bgWidth, level.bgHeight);
+            bool same = true;
+            for (int y = 0; y < 32 && same; ++y) {
+                for (int x = 0; x < 32 && same; ++x) {
+                    const std::size_t o =
+                        static_cast<std::size_t>(cellY * 32 + y) * level.pixelWidth() +
+                        cellX * 32 + x;
+                    if (level.image[o] != rebuilt[o]) same = false;
+                }
+            }
+            check(same, "tile repaint preserves background");
+        }
+    }
 
     int loadFailures = 0;
     std::string firstFailure;

@@ -24,6 +24,10 @@ with the code.
 - [x] DKC3 level catalogue (132 entries) and stage-settings editing.
 - [x] Level canvas with fit, zoom, pan, grid, hover and painting.
 - [x] Native horizontal and vertical canvas scrollbars (no need to zoom out).
+- [x] DKC2 Layer 2 backgrounds: Ship Deck ocean, Ship Mast clouds, Haunted Hall,
+      ship hold, brambles, honeycomb, forest, carnival and lava cave themes are
+      decoded from Big Data and composited behind the terrain.
+- [x] DKC1 themed sky gradients per level type as an interim backdrop.
 - [x] Tile palette with real metatile thumbnails and selection.
 - [x] Paint, pick and erase tools, horizontal/vertical flips.
 - [x] Undo/redo snapshots per level.
@@ -43,7 +47,12 @@ with the code.
       implemented.
 - [ ] No PNG export of the rendered level.
 - [ ] No palette editor.
-- [ ] No level resizing, layer editing or background preview.
+- [ ] No level resizing, layer editing or per-level background editing.
+- [ ] DKC1 backgrounds are still themed gradients (sky colours per level type).
+      The real DKC1 Layer 3 artwork is not decoded yet.
+- [ ] DKC3 previews show stage settings only; no terrain or backgrounds.
+- [ ] DKC2 background selection is a per-level table (from level ids and stage
+      themes); a few exotic levels still fall back to the gradient.
 - [ ] DKC2 `K rool cabin` and similar entries without map chips are marked
       unsupported.
 - [ ] DKC1 `Gangplank Galleon` uses a special raw tileset path; verify visually

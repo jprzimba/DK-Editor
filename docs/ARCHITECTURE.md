@@ -50,18 +50,28 @@ The wrapper uses `extern "C"` so the C symbols link correctly from C++.
 
 - `loadPalette()` reads 8 rows of 16 RGB555 colours. Colour 0 of each row is
   marked transparent (alpha 0).
-- `decodeCharset()` turns a 32-byte SNES 4bpp planar tile into 64 palette
-  indices. Byte layout is:
+- `decodeCharset()` turns SNES planar tiles into 64 palette indices. 4bpp tiles
+  are 32 bytes, laid out as
   `[row0 plane0, plane1] ... [row7 plane0, plane1]`,
   `[row0 plane2, plane3] ... [row7 plane2, plane3]`.
+  The `bpp` argument also accepts 2 and 8 for background layers.
 - `decodeMetatiles()` reads 4x4 character references. Each reference is:
   bits 0-9 character, bits 10-12 palette row, bit 14 horizontal flip, bit 15
   vertical flip.
 - `renderMetatile()` composites one 32x32 tile into an RGBA image. Index-0 pixels
   are skipped so the level background shows through.
+- `renderBackgroundTilemap()` draws a Layer 2 backdrop from two-byte 8x8 entries
+  (character index plus palette/flip attributes). `transparentZero` keeps index-0
+  pixels open so the sky gradient remains visible.
+- `fillLevelBackground()` repaints a rectangle of the backdrop without touching
+  terrain, so in-place tile edits never damage the scenery. `buildLevelImage()`
+  and the paint/erase paths use the same pixel function, which the self-test
+  compares after a single-cell repaint.
 - `buildLevelImage()` composites the whole tilemap. Tilemap words use the low
   10 bits (DKC1) or 12 bits (DKC2) as the metatile index and bits 14/15 as the
-  whole-tile flips.
+  whole-tile flips. It first fills the image with a vertical sky gradient, then
+  samples the optional backdrop (stretching it for horizontal stages, repeating
+  it for very tall ones, and dimming it slightly), then draws the terrain.
 
 ### `src/games/Game.h`
 
@@ -69,8 +79,9 @@ Common value types:
 
 - `LevelEntry`: catalogue row (id, name, group, supported/visual flags, note).
 - `LoadedLevel`: editable tilemap (`row-major y*width+x`), metatiles, charset,
-  palette, RGBA image, optional generic `LevelProperty` list, and a
-  game-specific `LevelContext`.
+  palette, RGBA image, background gradient colours and an optional decoded
+  background layer (`bgImage`, `bgWidth`, `bgHeight`), plus an optional generic
+  `LevelProperty` list and a game-specific `LevelContext`.
 - `Game`: polymorphic interface used by the UI and self-test.
 
 `LevelContext` is a small polymorphic payload. DKC2 stores the shared tilemap
@@ -101,6 +112,11 @@ DKC1 needs no extra context because its level offset is fixed metadata.
   (`bank, addr, op, size`). `0xA000` is Big Data, `0x2000` is raw.
 - Tilemap: type at `0x35BC54`, submap list at `0x35BC7E`, pointer at
   `0x35BAEF`.
+- Backgrounds: `backgroundForLevel()` maps level ids to Layer 2 theme assets
+  (Big Data tileset + 8x8 tilemap) taken from the ROM's layer, e.g. Ship Deck
+  ocean `0x29FDB3`/`0x07FCB8`, Ship Mast sky `0x2A121C`/`0x0AFABE`, brambles
+  `0x2AB6F0`/`0x380000`. The tilemap is drawn with the level palette and index-0
+  transparency where the layer is an overlay.
 - The decompressed tilemap can contain multiple submaps. A level reads only its
   region using the world bounds and stride.
 - Save recompresses the whole shared tilemap, writes it to the original slot if

@@ -40,6 +40,22 @@ const int kMetaCount[kHeaderCount] = {
     0x182, 0x189, 0x0E6, 0x080, 0x185, 0x07C, 0x07A,
 };
 
+const Color kThemeTop[kHeaderCount] = {
+    {34, 92, 170, 255},  {14, 12, 10, 255},  {20, 26, 34, 255},
+    {18, 16, 14, 255},   {18, 18, 26, 255},  {8, 30, 64, 255},
+    {30, 28, 16, 255},   {70, 105, 160, 255},{14, 22, 44, 255},
+    {12, 10, 9, 255},    {32, 82, 130, 255}, {10, 28, 18, 255},
+    {16, 12, 26, 255},   {20, 12, 26, 255},
+};
+
+const Color kThemeBottom[kHeaderCount] = {
+    {172, 210, 235, 255}, {40, 30, 22, 255},  {60, 70, 82, 255},
+    {52, 40, 30, 255},    {60, 45, 38, 255},  {2, 10, 26, 255},
+    {75, 65, 32, 255},    {205, 225, 245, 255},{55, 85, 120, 255},
+    {40, 32, 26, 255},    {120, 180, 210, 255},{45, 80, 40, 255},
+    {45, 35, 60, 255},    {60, 30, 60, 255},
+};
+
 const Dkc1LevelDef* findLevel(int id) {
     if (id < 0 || id >= static_cast<int>(std::size(kLevels))) return nullptr;
     return &kLevels[id];
@@ -171,7 +187,13 @@ bool Dkc1Game::loadLevel(Rom& rom, int levelId, LoadedLevel& out, std::string& e
     out.info.visual = true;
     out.vertical = def->vertical;
     out.indexMask = 0x3FF;
-    out.background = def->header == 12 ? Color{16, 10, 8, 255} : Color{6, 10, 20, 255};
+    if (def->header >= 0 && def->header < kHeaderCount) {
+        out.background = kThemeTop[def->header];
+        out.backgroundBottom = kThemeBottom[def->header];
+    } else {
+        out.background = Color{12, 16, 28, 255};
+        out.backgroundBottom = Color{4, 6, 12, 255};
+    }
 
     if (def->vertical) {
         out.width = 64;
@@ -221,7 +243,8 @@ bool Dkc1Game::loadLevel(Rom& rom, int levelId, LoadedLevel& out, std::string& e
     }
 
     buildLevelImage(out.image, out.width, out.height, out.tiles, out.indexMask,
-                    out.metas, out.charset, out.palette, out.background);
+                    out.metas, out.charset, out.palette, out.background,
+                    out.backgroundBottom);
     return true;
 }
 

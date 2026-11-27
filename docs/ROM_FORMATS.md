@@ -192,6 +192,28 @@ The level names come from the public DKC2 maps project and are stored in
 - Tilemap entry: bits 0-11 metatile index, bit 14 horizontal flip, bit 15
   vertical flip.
 
+### Backgrounds (Layer 2)
+
+DKC2 backgrounds are ordinary compressed graphic resources plus a small 8x8
+tilemap. Their file offsets, used by `backgroundForLevel()` in `Dkc2.cpp`:
+
+| Theme | Tileset | Tilemap | bpp |
+| --- | --- | --- | --- |
+| Ship Deck ocean/sky | `0x29FDB3` | `0x07FCB8` | 4 |
+| Ship Mast clouds | `0x2A121C` | `0x0AFABE` | 4 |
+| Haunted Hall | `0x295221` | `0x0CFEDF` | 4 |
+| Ship hold back wall | `0x29A905` | `0x09FF37` | 4 |
+| Brambles | `0x2AB6F0` | `0x380000` | 4 |
+| Honeycomb cells | `0x16F791` | `0x14FC2D` | 4 |
+| Forest trees | `0x3B6FC0` | `0x15FEB3` | 4 |
+| Carnival / track | `0x2A23D4` | `0x0FFFD9` | 4 |
+| Lava cave rock | `0x295623` | `0x1CFA5E` | 4 |
+| Cave sparkles | `0x2B2B84` | `0x19F7C9` | 2 |
+
+Both resources use Big Data. Each map entry is two bytes: character index and
+attributes (bits 2-4 palette row, bit 6 horizontal flip, bit 7 vertical flip).
+The map is 32 tiles wide and `decompressed size / 64` tiles tall.
+
 ### DKC2 save
 
 1. Copy the edited region back into the shared decompressed tilemap.

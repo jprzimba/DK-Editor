@@ -45,6 +45,10 @@ struct LoadedLevel {
     Charset charset;
     Palette palette;
     Color background{8, 10, 18, 255};
+    Color backgroundBottom{4, 5, 10, 255};
+    std::vector<u32> bgImage;
+    int bgWidth = 0;
+    int bgHeight = 0;
     std::vector<u32> image; // width*32 x height*32, RGBA
     std::vector<LevelProperty> properties;
     std::shared_ptr<LevelContext> context;
