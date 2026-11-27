@@ -1,0 +1,39 @@
+# Build output
+/build/
+/out/
+/.vs/
+/vcpkg/
+*.user
+*.suo
+*.VC.db
+*.VC.opendb
+*.pdb
+*.ilk
+*.obj
+*.lib
+*.exp
+*.exe
+*.dll
+
+# Research scratch: downloaded reference projects, extracted assets and ROM analysis
+/.research/
+
+# Editor / OS
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+*.log
+
+# Local test artefacts
+/tests/out/
+/ui_*.png
+*.tmp
+*.bak
+*.smc.bak
+*.sfc.bak
+
+# The ROMs are copyrighted; do not commit them.
+*.smc
+*.sfc
+*.nes
