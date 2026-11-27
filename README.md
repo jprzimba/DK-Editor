@@ -89,7 +89,7 @@ repository.
 | Paint selected tile | Left click / drag |
 | Erase tile | Right click / drag, or the Erase tool |
 | Pick tile under cursor | Alt + left click, or the Pick tool |
-| Pan | Middle-drag, or Space + left-drag |
+| Pan | Middle-drag, Space + left-drag, or the canvas scrollbars |
 | Zoom | Mouse wheel |
 | Fit level | `F` or the **Fit** button |
 | Toggle grid | **Grid** checkbox |

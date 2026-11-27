@@ -119,7 +119,9 @@ DKC1 needs no extra context because its level offset is fixed metadata.
 ### `src/ui/EditorApp.*`
 
 - Owns the main window layout: level list, canvas and tool panel.
-- `drawCanvas()` maps mouse coordinates through zoom/pan to tile coordinates.
+- `drawCanvas()` maps mouse coordinates through zoom and the child-window scroll
+  to tile coordinates. The canvas uses native ImGui scrollbars, so wide levels can
+  be panned without changing the zoom.
 - Painting rebuilds only the affected 32x32 pixels and uploads that region.
 - The tile palette is a single RGBA atlas built from the current level's
   metatiles and palette.

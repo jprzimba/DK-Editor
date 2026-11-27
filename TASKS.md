@@ -23,6 +23,7 @@ with the code.
 - [x] DKC2 double-save without reload after relocation.
 - [x] DKC3 level catalogue (132 entries) and stage-settings editing.
 - [x] Level canvas with fit, zoom, pan, grid, hover and painting.
+- [x] Native horizontal and vertical canvas scrollbars (no need to zoom out).
 - [x] Tile palette with real metatile thumbnails and selection.
 - [x] Paint, pick and erase tools, horizontal/vertical flips.
 - [x] Undo/redo snapshots per level.

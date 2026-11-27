@@ -84,10 +84,10 @@ private:
     bool showGrid_ = true;
     bool showCollision_ = false; // reserved
     float zoom_ = 0.5f;
-    ImVec2 pan_{-1, -1};
-    bool panInitialized_ = false;
-    bool autoFit_ = true;
+    int autoFitFrames_ = 2;
     bool fitWhole_ = false;
+    bool pendingScroll_ = false;
+    ImVec2 pendingScrollTarget_{0, 0};
     bool dirty_ = false;
     int scrollFrames_ = 0;
     int paletteScrollFrames_ = 0;

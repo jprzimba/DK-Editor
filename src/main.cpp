@@ -11,6 +11,7 @@
 
 #include <memory>
 #include <string>
+#include <algorithm>
 
 #include <shellapi.h>
 
@@ -131,9 +132,16 @@ int APIENTRY wWinMain(HINSTANCE hInstance, HINSTANCE, LPWSTR, int) {
     const int height = 940;
     RECT rect{0, 0, width, height};
     AdjustWindowRect(&rect, WS_OVERLAPPEDWINDOW, FALSE);
+
+    RECT work{};
+    SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
+    const int winW = std::min(rect.right - rect.left, work.right - work.left - 24);
+    const int winH = std::min(rect.bottom - rect.top, work.bottom - work.top - 24);
+    const int winX = work.left + ((work.right - work.left) - winW) / 2;
+    const int winY = work.top + ((work.bottom - work.top) - winH) / 2;
+
     g_hwnd = CreateWindowW(wc.lpszClassName, L"DK Editor - Donkey Kong Country 1/2/3",
-                           WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT,
-                           rect.right - rect.left, rect.bottom - rect.top, nullptr,
+                           WS_OVERLAPPEDWINDOW, winX, winY, winW, winH, nullptr,
                            nullptr, hInstance, nullptr);
     if (!g_hwnd) return 1;
     if (appIcon) SendMessageW(g_hwnd, WM_SETICON, ICON_BIG, reinterpret_cast<LPARAM>(appIcon));

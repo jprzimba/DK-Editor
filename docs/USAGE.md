@@ -38,12 +38,16 @@ the reason.
 | Action | Input |
 | --- | --- |
 | Zoom in/out at cursor | Mouse wheel |
+| Scroll horizontally/vertically | Bottom/right scrollbar of the canvas |
 | Pan | Middle-drag, or Space + left-drag |
 | Fit the whole level | `F` or **Fit** |
 | Toggle the 32x32 grid | **Grid** checkbox |
 | Hover a tile | Move the pointer; the status line shows tile X/Y and value |
 
-The zoom range is 5% to 400%.
+The zoom range is 5% to 400%. When a level is wider or taller than the canvas,
+native scrollbars appear at the bottom and right edges; you can drag them to move
+through the level without changing the zoom. The default view is 100% (or
+height-fit for very tall levels). **Fit** shows the entire level.
 
 ## Selecting a tile
 

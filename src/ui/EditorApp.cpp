@@ -149,9 +149,9 @@ bool EditorApp::loadLevel(int id) {
     paletteScrollFrames_ = 2;
     selectedMeta_ = 0;
     flipH_ = flipV_ = false;
-    panInitialized_ = false;
-    autoFit_ = true;
+    autoFitFrames_ = 2;
     fitWhole_ = false;
+    pendingScroll_ = false;
 
     std::string err;
     if (!game_->loadLevel(rom_, id, level_, err)) {
@@ -248,12 +248,14 @@ void EditorApp::fitView(const ImVec2& canvasSize) {
     const float pw = static_cast<float>(level_.pixelWidth());
     const float ph = static_cast<float>(level_.pixelHeight());
     if (pw <= 0 || ph <= 0) return;
-    float z = std::min(canvasSize.x / pw, canvasSize.y / ph);
+    float z = std::min((canvasSize.x - 32.0f) / pw, (canvasSize.y - 32.0f) / ph);
     z = std::clamp(z, 0.05f, 1.0f);
     zoom_ = z;
-    pan_.x = (canvasSize.x - pw * z) * 0.5f;
-    pan_.y = (canvasSize.y - ph * z) * 0.5f;
-    panInitialized_ = true;
+    const float cw = std::max(canvasSize.x, pw * z + 32.0f);
+    const float ch = std::max(canvasSize.y, ph * z + 32.0f);
+    pendingScrollTarget_.x = std::max(0.0f, (cw - canvasSize.x) * 0.5f);
+    pendingScrollTarget_.y = std::max(0.0f, (ch - canvasSize.y) * 0.5f);
+    pendingScroll_ = true;
 }
 
 void EditorApp::fitHeightView(const ImVec2& canvasSize) {
@@ -261,12 +263,16 @@ void EditorApp::fitHeightView(const ImVec2& canvasSize) {
     const float pw = static_cast<float>(level_.pixelWidth());
     const float ph = static_cast<float>(level_.pixelHeight());
     if (pw <= 0 || ph <= 0) return;
-    float z = std::min(1.0f, canvasSize.y / ph);
+    float z = std::min(1.0f, (canvasSize.y - 32.0f) / ph);
     z = std::clamp(z, 0.05f, 1.0f);
     zoom_ = z;
-    pan_.x = pw * z < canvasSize.x ? (canvasSize.x - pw * z) * 0.5f : 16.0f;
-    pan_.y = (canvasSize.y - ph * z) * 0.5f;
-    panInitialized_ = true;
+    const float cw = std::max(canvasSize.x, pw * z + 32.0f);
+    const float ch = std::max(canvasSize.y, ph * z + 32.0f);
+    pendingScrollTarget_.x = 0.0f;
+    pendingScrollTarget_.y = std::max(0.0f, (ch - canvasSize.y) * 0.5f);
+    pendingScroll_ = true;
+    (void)pw;
+    (void)cw;
 }
 
 void EditorApp::beginStroke() {
@@ -401,7 +407,7 @@ void EditorApp::drawMenuBar() {
     }
     if (ImGui::BeginMenu("View")) {
         ImGui::MenuItem("Tile grid", nullptr, &showGrid_);
-        if (ImGui::MenuItem("Fit level to window", "F")) { panInitialized_ = false; autoFit_ = true; fitWhole_ = true; }
+        if (ImGui::MenuItem("Fit level to window", "F")) { autoFitFrames_ = 2; fitWhole_ = true; }
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Help")) {
@@ -431,7 +437,7 @@ void EditorApp::drawToolbar() {
     ImGui::SameLine();
     ImGui::Checkbox("Grid", &showGrid_);
     ImGui::SameLine();
-    if (ImGui::Button("Fit")) { panInitialized_ = false; autoFit_ = true; fitWhole_ = true; }
+    if (ImGui::Button("Fit")) { autoFitFrames_ = 2; fitWhole_ = true; }
     ImGui::SameLine();
     ImGui::TextDisabled("Zoom %.0f%%", zoom_ * 100.0f);
     ImGui::SameLine();
@@ -509,102 +515,121 @@ void EditorApp::drawLevelPanel() {
 void EditorApp::drawCanvas() {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
     ImGui::BeginChild("canvas", ImVec2(0, 0), ImGuiChildFlags_Borders,
-                      ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+                      ImGuiWindowFlags_HorizontalScrollbar |
+                      ImGuiWindowFlags_NoScrollWithMouse);
     ImGui::PopStyleVar();
 
-    ImVec2 origin = ImGui::GetCursorScreenPos();
-    ImVec2 size = ImGui::GetContentRegionAvail();
-    if (size.x < 64) size.x = 64;
-    if (size.y < 64) size.y = 64;
-
-    ImGui::InvisibleButton("##canvas-area", size,
-                           ImGuiButtonFlags_MouseButtonLeft |
-                           ImGuiButtonFlags_MouseButtonRight |
-                           ImGuiButtonFlags_MouseButtonMiddle);
-    const bool hovered = ImGui::IsItemHovered();
     ImGuiIO& io = ImGui::GetIO();
+    const ImVec2 windowPos = ImGui::GetWindowPos();
+    ImVec2 origin = ImGui::GetCursorScreenPos();
+    ImVec2 view = ImGui::GetContentRegionAvail();
+    if (view.x < 64) view.x = 64;
+    if (view.y < 64) view.y = 64;
+    const ImVec2 clip0(windowPos.x + 1.0f, windowPos.y + 1.0f);
+    const ImVec2 clip1(clip0.x + view.x, clip0.y + view.y);
+    ImDrawList* dl = ImGui::GetWindowDrawList();
 
     if (!level_.valid()) {
-        ImDrawList* dl = ImGui::GetWindowDrawList();
-        dl->AddRectFilled(origin, origin + size, IM_COL32(16, 17, 22, 255));
+        dl->PushClipRect(clip0, clip1, true);
+        dl->AddRectFilled(clip0, clip1, IM_COL32(16, 17, 22, 255));
         if (selectedLevel_ >= 0 && !level_.info.name.empty()) {
             const std::string title = level_.info.name;
             const std::string note = level_.info.note.empty()
                 ? "This level has no visual tilemap in this build."
                 : level_.info.note;
             const ImVec2 t1 = ImGui::CalcTextSize(title.c_str());
-            dl->AddText(origin + ImVec2((size.x - t1.x) * 0.5f, size.y * 0.35f),
+            dl->AddText(ImVec2(clip0.x + (view.x - t1.x) * 0.5f, clip0.y + view.y * 0.35f),
                         IM_COL32(255, 210, 90, 255), title.c_str());
-            const ImVec2 t2 = ImGui::CalcTextSize(note.c_str(), nullptr, false, size.x - 80);
+            const ImVec2 t2 = ImGui::CalcTextSize(note.c_str(), nullptr, false, view.x - 80);
             dl->AddText(nullptr, 0,
-                        origin + ImVec2((size.x - t2.x) * 0.5f, size.y * 0.35f + 28),
-                        IM_COL32(210, 214, 225, 255), note.c_str(), nullptr,
-                        size.x - 80);
+                        ImVec2(clip0.x + (view.x - t2.x) * 0.5f, clip0.y + view.y * 0.35f + 28),
+                        IM_COL32(210, 214, 225, 255), note.c_str(), nullptr, view.x - 80);
             const char* hint = "Use the Stage settings panel on the right.";
             const ImVec2 t3 = ImGui::CalcTextSize(hint);
-            dl->AddText(origin + ImVec2((size.x - t3.x) * 0.5f, size.y * 0.35f + 80),
+            dl->AddText(ImVec2(clip0.x + (view.x - t3.x) * 0.5f, clip0.y + view.y * 0.35f + 80),
                         IM_COL32(140, 150, 165, 255), hint);
         } else {
             const char* msg = levelError_.empty() ? "Select a level to begin."
                                                   : levelError_.c_str();
-            ImVec2 ts = ImGui::CalcTextSize(msg, nullptr, false, size.x - 40);
+            const ImVec2 ts = ImGui::CalcTextSize(msg, nullptr, false, view.x - 40);
             dl->AddText(nullptr, 0,
-                origin + ImVec2((size.x - ts.x) * 0.5f, (size.y - ts.y) * 0.5f),
-                IM_COL32(220, 220, 230, 255), msg);
+                        ImVec2(clip0.x + (view.x - ts.x) * 0.5f,
+                               clip0.y + (view.y - ts.y) * 0.5f),
+                        IM_COL32(220, 220, 230, 255), msg);
         }
+        dl->PopClipRect();
         ImGui::EndChild();
         return;
     }
 
-    if (autoFit_ || !panInitialized_) {
-        if (fitWhole_) fitView(size);
-        else fitHeightView(size);
+    if (autoFitFrames_ > 0) {
+        if (fitWhole_) fitView(view);
+        else fitHeightView(view);
+        --autoFitFrames_;
     }
 
-    // Mouse wheel zoom around the cursor.
-    if (hovered && io.MouseWheel != 0.0f) {
-        autoFit_ = false;
-        const ImVec2 m = io.MousePos;
+    const float margin = 32.0f;
+    const float imgW = level_.pixelWidth() * zoom_;
+    const float imgH = level_.pixelHeight() * zoom_;
+    const ImVec2 content(std::max(view.x, imgW + margin), std::max(view.y, imgH + margin));
+
+    ImGui::InvisibleButton("##canvas-area", content,
+                           ImGuiButtonFlags_MouseButtonLeft |
+                           ImGuiButtonFlags_MouseButtonRight |
+                           ImGuiButtonFlags_MouseButtonMiddle);
+    const bool itemHovered = ImGui::IsItemHovered();
+    const bool inside = itemHovered &&
+                        io.MousePos.x >= clip0.x && io.MousePos.y >= clip0.y &&
+                        io.MousePos.x < clip1.x && io.MousePos.y < clip1.y;
+
+    const ImVec2 itemMin = ImGui::GetItemRectMin();
+    const ImVec2 imagePos(itemMin.x + (content.x - imgW) * 0.5f,
+                          itemMin.y + (content.y - imgH) * 0.5f);
+    const ImVec2 imageEnd(imagePos.x + imgW, imagePos.y + imgH);
+
+    // Zoom around the mouse.  The scroll target keeps the world point under the
+    // cursor when the content is larger than the viewport.
+    if (inside && io.MouseWheel != 0.0f) {
+        autoFitFrames_ = 0;
         const float oldZoom = zoom_;
         float newZoom = zoom_ * std::pow(1.18f, io.MouseWheel);
         newZoom = std::clamp(newZoom, 0.05f, 4.0f);
         if (newZoom != oldZoom) {
-            const ImVec2 world((m.x - origin.x - pan_.x) / oldZoom,
-                               (m.y - origin.y - pan_.y) / oldZoom);
+            const ImVec2 world((io.MousePos.x - imagePos.x) / oldZoom,
+                               (io.MousePos.y - imagePos.y) / oldZoom);
             zoom_ = newZoom;
-            pan_.x = m.x - origin.x - world.x * zoom_;
-            pan_.y = m.y - origin.y - world.y * zoom_;
+            pendingScrollTarget_.x = ImGui::GetScrollX() + world.x * (newZoom - oldZoom);
+            pendingScrollTarget_.y = ImGui::GetScrollY() + world.y * (newZoom - oldZoom);
+            pendingScroll_ = true;
         }
     }
 
-    // Panning.
+    // Middle-drag or Space+left-drag pans by moving the child scroll.
     const bool space = ImGui::IsKeyDown(ImGuiKey_Space);
     if ((ImGui::IsMouseDragging(ImGuiMouseButton_Middle) ||
          (space && ImGui::IsMouseDragging(ImGuiMouseButton_Left))) &&
-        (hovered || ImGui::IsItemActive())) {
-        autoFit_ = false;
-        pan_.x += io.MouseDelta.x;
-        pan_.y += io.MouseDelta.y;
+        (inside || ImGui::IsItemActive())) {
+        autoFitFrames_ = 0;
+        pendingScrollTarget_.x = ImGui::GetScrollX() - io.MouseDelta.x;
+        pendingScrollTarget_.y = ImGui::GetScrollY() - io.MouseDelta.y;
+        pendingScroll_ = true;
     }
 
-    // Clamp so the image cannot be lost entirely.
-    const ImVec2 imgSize(level_.pixelWidth() * zoom_, level_.pixelHeight() * zoom_);
-    pan_.x = std::clamp(pan_.x, -imgSize.x + 80.0f, size.x - 80.0f);
-    pan_.y = std::clamp(pan_.y, -imgSize.y + 80.0f, size.y - 80.0f);
+    if (pendingScroll_) {
+        ImGui::SetScrollX(pendingScrollTarget_.x);
+        ImGui::SetScrollY(pendingScrollTarget_.y);
+        pendingScroll_ = false;
+    }
 
-    ImDrawList* dl = ImGui::GetWindowDrawList();
-    dl->PushClipRect(origin, origin + size, true);
-    dl->AddRectFilled(origin, origin + size, IM_COL32(14, 15, 20, 255));
-
-    ImVec2 imagePos = origin + pan_;
-    ImVec2 imageEnd = imagePos + imgSize;
+    dl->PushClipRect(clip0, clip1, true);
+    dl->AddRectFilled(clip0, clip1, IM_COL32(14, 15, 20, 255));
     if (levelTex_.valid()) {
         dl->AddImage(levelTex_.imguiId(), imagePos, imageEnd);
     }
 
     // Cursor -> tile.
     int tx = -1, ty = -1;
-    if (hovered && zoom_ > 0.0f) {
+    if (inside && zoom_ > 0.0f) {
         const float px = (io.MousePos.x - imagePos.x) / zoom_;
         const float py = (io.MousePos.y - imagePos.y) / zoom_;
         if (px >= 0 && py >= 0 && px < level_.pixelWidth() && py < level_.pixelHeight()) {
@@ -637,7 +662,7 @@ void EditorApp::drawCanvas() {
 
     // Painting.
     const bool canEdit = level_.info.visual && !space;
-    if (canEdit && tx >= 0 && ty >= 0) {
+    if (canEdit && inside && tx >= 0 && ty >= 0) {
         if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
             if (io.KeyAlt || tool_ == Tool::Picker) {
                 pickAt(tx, ty);
@@ -645,9 +670,6 @@ void EditorApp::drawCanvas() {
                 beginStroke();
                 if (tool_ == Tool::Erase) eraseAt(tx, ty);
                 else paintAt(tx, ty);
-                if (strokeActive_) {
-                    // Keep the stroke alive while the button is held.
-                }
             }
         }
         if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
@@ -663,22 +685,14 @@ void EditorApp::drawCanvas() {
             eraseAt(tx, ty);
         }
     }
-    if (strokeActive_ && !ImGui::IsMouseDown(ImGuiMouseButton_Left) &&
+    if (strokeActive_ && (!ImGui::IsMouseDown(ImGuiMouseButton_Left) ||
+                         !inside) &&
         !ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
         endStroke();
     }
-
-    // Overlay for DKC3 / non-visual levels.
-    if (!level_.info.visual) {
-        dl->AddRectFilled(ImVec2(origin.x + 20, origin.y + 20),
-                          ImVec2(origin.x + size.x - 20, origin.y + 92),
-                          IM_COL32(20, 22, 30, 230), 6.0f);
-        dl->AddText(ImVec2(origin.x + 34, origin.y + 32),
-                    IM_COL32(255, 210, 90, 255),
-                    "DKC3 visual editing is not in this build.");
-        dl->AddText(ImVec2(origin.x + 34, origin.y + 54),
-                    IM_COL32(210, 214, 225, 255),
-                    "Use the stage settings panel on the right. Saving is supported.");
+    if (strokeActive_ && !ImGui::IsMouseDown(ImGuiMouseButton_Left) &&
+        !ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
+        endStroke();
     }
 
     dl->PopClipRect();
@@ -848,7 +862,7 @@ void EditorApp::draw() {
             else undo();
         }
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y)) redo();
-        if (ImGui::IsKeyPressed(ImGuiKey_F)) { panInitialized_ = false; autoFit_ = true; fitWhole_ = true; }
+        if (ImGui::IsKeyPressed(ImGuiKey_F)) { autoFitFrames_ = 2; fitWhole_ = true; }
     }
 
     drawMenuBar();
