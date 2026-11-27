@@ -148,8 +148,10 @@ and leaves the file untouched.
 
 ### DKC3
 
-This build edits stage settings only (see below). Saving writes the changed
-fields and fixes the checksum. Terrain editing is planned for the next milestone.
+This build edits stage settings (see below) and shows a read-only background
+preview for cave, forest, riverbank, pipe and lakeside stages. Saving writes the
+changed fields and fixes the checksum. Terrain editing is planned for the next
+milestone.
 
 ## DKC3 stage settings
 

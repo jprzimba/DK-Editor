@@ -67,6 +67,10 @@ The wrapper uses `extern "C"` so the C symbols link correctly from C++.
   terrain, so in-place tile edits never damage the scenery. `buildLevelImage()`
   and the paint/erase paths use the same pixel function, which the self-test
   compares after a single-cell repaint.
+- `decompressTilemapDkc3()` decodes DKC3's bit-packed tilemap format into 16-bit
+  words. `Dkc3.cpp` uses it to build the read-only background preview, choosing
+  the stage's `FGBG_*` palette and recovering the tileset character base from
+  the highest tile index in the map.
 - `buildLevelImage()` composites the whole tilemap. Tilemap words use the low
   10 bits (DKC1) or 12 bits (DKC2) as the metatile index and bits 14/15 as the
   whole-tile flips. It first fills the image with a vertical sky gradient, then

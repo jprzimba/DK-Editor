@@ -27,4 +27,9 @@ bool compress(DkFormat format, const std::vector<u8>& input, std::vector<u8>& ou
 std::size_t compressedSize(DkFormat format, const std::vector<u8>& src,
                            std::size_t offset);
 
+// DKC3's dedicated tilemap compression.  Decodes to 16-bit tilemap words.
+// Returns false if the header or stream is invalid.
+bool decompressTilemapDkc3(const std::vector<u8>& src, std::size_t offset,
+                           std::vector<u16>& out, std::string& error);
+
 } // namespace dk

@@ -15,7 +15,7 @@ checksum.
 | --- | --- | --- | --- | --- | --- |
 | DKC1 (US v1.2) | Yes | 65 stages and sub-rooms | Original tilesets, metatiles and palettes + themed sky | Paint, pick, erase, flip, undo/redo | In-place |
 | DKC2 (US v1.1) | Yes | 192 stages and sub-rooms | Original tilesets, map chips and palettes + Layer 2 backgrounds | Paint, pick, erase, flip, undo/redo | Recompress + relocate |
-| DKC3 (US v1.0) | Yes | 132 stages and sub-rooms | Not yet | Stage settings / entrances | Direct |
+| DKC3 (US v1.0) | Yes | 132 stages and sub-rooms | Background preview for cave, forest, riverbank, pipe and lakeside stages | Stage settings / entrances | Direct |
 
 ### Backgrounds
 
@@ -59,7 +59,10 @@ checksum.
   exit rooms.
 - Edits music, start/midpoint/bonus/warp parameters and coordinates, parrot and
   Koin flags, and writes the changes back with a fixed checksum.
-- Visual terrain editing is the next milestone (see `TASKS.md`).
+- Decodes and shows the real stage backdrop as a read-only preview for cave,
+  forest, riverbank, pipe and lakeside stages. The preview uses the stage's own
+  FGBG palette and the DKC3 tilemap compression.
+- Terrain editing is the next milestone (see `TASKS.md`).
 
 ## Build
 

@@ -55,7 +55,9 @@ struct LoadedLevel {
 
     int pixelWidth() const { return width * 32; }
     int pixelHeight() const { return height * 32; }
-    bool valid() const { return width > 0 && height > 0 && !tiles.empty(); }
+    bool valid() const {
+        return width > 0 && height > 0 && (!tiles.empty() || !image.empty());
+    }
 };
 
 class Game {

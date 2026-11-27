@@ -232,9 +232,27 @@ The ROM size stays 4 MiB. The editor never expands the image.
 
 ### Stage configuration
 
+### DKC3 stage configuration
+
 DKC3 stage config records are listed in `src/games/Dkc3Levels.inc`. They are
-40-byte structures at file offsets such as `0x3D0599`. The editor currently
-exposes:
+variable-length structures at file offsets such as `0x3D0599` (regular stages are
+`0x36` bytes apart). The documented layout is:
+
+```
+dw type
+db music
+dw tilesetConfig        ; pointer into bank $FD (11-byte theme record)
+db layout               ; Horizontal / TallHorizontal / Vertical / Square / ...
+db palette              ; index into the palette table at $FD54E9
+db ? dw camera
+db gimmick
+dw ?
+dw flags
+... entrance list (5 bytes each), terminated by a $FF byte ...
+dw destination ids ..., $FFFF, $FFFF
+```
+
+The editor currently exposes:
 
 | Offset | Meaning |
 | --- | --- |
@@ -250,17 +268,40 @@ exposes:
 Coordinates are stored biased by 256 in the ROM; the UI displays the unbiased
 value.
 
+### DKC3 palettes
+
+- Palette pointer table: `0xFD54E9` (file `0x3D54E9`), one 16-bit offset per id.
+- Palette data starts at `0xFD0000 + offset`, 0x100 bytes (8 rows of 16 RGB555
+  colours).
+- The stage configuration's palette byte selects the stage's `FGBG_*` palette.
+
+### DKC3 tilemap compression
+
+DKC3 layer tilemaps use a dedicated format (documented by Karaage Lab), not Big
+Data:
+
+- 3-byte header: field-expansion specifier (bit 0 priority, bit 1 H flip, bit 2
+  V flip) and a 16-bit word count.
+- Fields are written in order: priority, H flip, V flip, palette index, tile
+  index, each bit-packed MSB first.
+- Optional fields use `0 X` (one word) or `1 X YYYYYY` (run of `Y` words);
+  palette uses 3-bit values with 4-bit runs; the tile index uses 2-bit commands
+  (single, run, ascending run, descending run).
+- Implemented in `decompressTilemapDkc3()` (`src/core/Compression.*`).
+
+### DKC3 backgrounds
+
+- Theme tilemaps and tilesets live in the compressed tilemap / graphics tables
+  (`TM_Layer2_*`, `GFX_Layer2_*`, ... in the asset listing).
+- Backgrounds are drawn with the stage's `FGBG_*` palette. Tilesets are loaded at
+  a VRAM character base that is recovered from the highest index used by the map.
+- Currently wired for cave, forest, riverbank, pipe and lakeside stages as a
+  read-only preview.
+
 ### DKC3 terrain
 
-Not implemented yet. The DKC3 disassembly and public documents provide:
-
-- Level data regions (`LevelDataPointersStart`): cave, coral reef, mountain,
-  jungle, factory, mill, riverbank, pier, snow, forest, drain pipe and waterfall.
-- Map32 bases for the same themes.
-- Small Data tilemap compression.
-
-The missing link is a reliable per-stage mapping from the config record to its
-compressed tilemap and dimensions. This is the first item in the next milestone.
+Not implemented yet. The remaining piece is the per-stage map offset and layout
+inside the Big Data "LevelData" bundles (see `TASKS.md`).
 
 ## Safety notes
 

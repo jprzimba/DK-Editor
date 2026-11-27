@@ -1074,7 +1074,10 @@ void EditorApp::drawToolPanel() {
             if (!level_.bgImage.empty()) {
                 ImGui::TextDisabled("Background: read-only scenery");
             }
-            if (cursorX_ >= 0 && cursorY_ >= 0) {
+            if (level_.tiles.empty()) {
+                ImGui::TextColored(ImVec4(1.0f, 0.85f, 0.45f, 1.0f), "Background preview only");
+                if (!level_.info.note.empty()) ImGui::TextWrapped("%s", level_.info.note.c_str());
+            } else if (cursorX_ >= 0 && cursorY_ >= 0) {
                 const u16 v = level_.tiles[static_cast<std::size_t>(cursorY_) * level_.width + cursorX_];
                 ImGui::Text("Cursor: %d,%d  tile %03X", cursorX_, cursorY_, v & level_.indexMask);
             }

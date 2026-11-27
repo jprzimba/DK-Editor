@@ -277,6 +277,8 @@ void testDkc3(const std::string& path) {
     dk::LoadedLevel level;
     check(game->loadLevel(rom, id, level, err), "load level properties");
     check(!level.properties.empty(), "properties available");
+    check(!level.image.empty() && level.width > 0 && level.height > 0,
+          "background preview decoded");
     if (level.properties.empty()) return;
 
     auto& music = level.properties[0];

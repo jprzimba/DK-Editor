@@ -21,7 +21,10 @@ with the code.
 - [x] DKC2 Big Data tilesets, map chips and tilemaps.
 - [x] DKC2 recompression, free-space relocation and pointer-table update.
 - [x] DKC2 double-save without reload after relocation.
-- [x] DKC3 level catalogue (132 entries) and stage-settings editing.
+- [x] DKC3 stage-settings editing.
+- [x] DKC3 background preview: the stage backdrop is decoded from the DKC3
+      tilemap compression and its own FGBG palette for cave, forest, riverbank,
+      pipe and lakeside stages (read-only, shown on the canvas).
 - [x] Level canvas with fit, zoom, pan, grid, hover and painting.
 - [x] Native horizontal and vertical canvas scrollbars (no need to zoom out).
 - [x] DKC2 Layer 2 backgrounds: Ship Deck ocean, Ship Mast clouds, Haunted Hall,
@@ -45,6 +48,9 @@ with the code.
 ### Known limitations
 
 - [ ] DKC3 terrain editing is not implemented; only stage settings are editable.
+- [ ] DKC3 background previews cover cave, forest, riverbank, pipe and lakeside
+      stages; snow, factory, mountain, reef and mill still need their asset
+      mapping (see the research notes below).
 - [ ] DKC2 levels that share a tilemap are edited together. The UI does not yet
       warn before saving a shared map.
 - [ ] DKC1/DKC2 object, sprite, banana, camera and entrance editing is not
@@ -54,7 +60,8 @@ with the code.
 - [ ] No level resizing, layer editing or per-level background editing.
 - [ ] DKC1 backgrounds are still themed gradients (sky colours per level type).
       The real DKC1 Layer 3 artwork is not decoded yet.
-- [ ] DKC3 previews show stage settings only; no terrain or backgrounds.
+- [ ] DKC3 canvases show a background preview only; there is no terrain or
+      editing surface yet.
 - [ ] DKC2 background selection is a per-level table (from level ids and stage
       themes); a few exotic levels still fall back to the gradient.
 - [ ] DKC2 `K rool cabin` and similar entries without map chips are marked
@@ -89,13 +96,19 @@ with the code.
 - A stage's map offset inside its bundle, the layout code, the palette and the
   background ids are still unidentified.
 - Layer 2/3 tilemaps use the DKC3-specific tilemap compression (Karaage Lab
-  "Tilemap compression format"); a decoder is prototyped in `.research`.
+  "Tilemap compression format"); `decompressTilemapDkc3()` implements it.
+- Background previews use the level's `FGBG_*` palette (palette id at config
+  `+6`, pointer table `$FD54E9`) and the theme's layer-2 tilemap + tileset.
+  The tileset is loaded at a VRAM character base that is recovered from the
+  highest tile index used by the map.
+- Still open: the per-stage map offset/layout inside each bundle, the remaining
+  theme asset pairs (snow, factory, mountain, reef, mill) and save support.
 
 ### Tasks
 
 - [ ] Identify the per-stage map offset/layout inside each LevelData bundle.
 - [ ] Identify the stage palette and background ids.
-- [ ] Port the DKC3 tilemap decompressor to `src/core/Compression.*`.
+- [x] Port the DKC3 tilemap decompressor to `src/core/Compression.*`.
 - [ ] Decode and render Layer 1 (terrain) with the theme M32 and tileset.
 - [ ] Implement save: recompress the bundle, relocate if needed, update pointers.
 - [ ] Add DKC3 vertical/special layout support.
