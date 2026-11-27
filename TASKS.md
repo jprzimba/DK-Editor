@@ -30,6 +30,10 @@ with the code.
 - [x] DKC1 themed sky gradients per level type as an interim backdrop.
 - [x] Tile palette with real metatile thumbnails and selection.
 - [x] Paint, pick and erase tools, horizontal/vertical flips.
+- [x] Lunar Magic style rectangular area selection with fill, clear, copy and
+      paste, plus `Ctrl+A`, `Ctrl+C`, `Ctrl+V`, `Delete` and `Esc` shortcuts.
+- [x] No tile is pre-selected when a level opens; paint waits for a palette pick.
+- [x] Fit toggles between the whole level and the previous zoom.
 - [x] Undo/redo snapshots per level.
 - [x] Targeted 32x32 partial texture upload while painting.
 - [x] Searchable, grouped level list with unsupported-entry notes.

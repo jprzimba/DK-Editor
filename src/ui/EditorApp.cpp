@@ -147,11 +147,14 @@ bool EditorApp::loadLevel(int id) {
     dirty_ = false;
     scrollFrames_ = 2;
     paletteScrollFrames_ = 2;
-    selectedMeta_ = 0;
+    selectedMeta_ = -1;
     flipH_ = flipV_ = false;
     autoFitFrames_ = 2;
     fitWhole_ = false;
+    fitRequest_ = false;
+    fitted_ = false;
     pendingScroll_ = false;
+    clearSelection();
 
     std::string err;
     if (!game_->loadLevel(rom_, id, level_, err)) {
@@ -164,19 +167,6 @@ bool EditorApp::loadLevel(int id) {
     }
     uploadLevelTexture();
     uploadAtlasTexture();
-    selectedMeta_ = 0;
-    if (!level_.metas.empty()) {
-        std::vector<int> counts(level_.metas.size(), 0);
-        for (u16 t : level_.tiles) {
-            const int mi = t & level_.indexMask;
-            if (mi > 0 && mi < static_cast<int>(counts.size())) ++counts[mi];
-        }
-        int best = 0;
-        for (int i = 1; i < static_cast<int>(counts.size()); ++i) {
-            if (counts[i] > counts[best]) best = i;
-        }
-        selectedMeta_ = best;
-    }
     if (level_.info.visual) {
         setStatus("Loaded " + level_.info.name + " (" +
                   std::to_string(level_.width) + " x " + std::to_string(level_.height) +
@@ -213,7 +203,7 @@ int EditorApp::atlasRows() const {
 
 ImVec2 EditorApp::atlasUv(int index) const {
     const int rows = atlasRows();
-    if (rows <= 0) return ImVec2(0, 0);
+    if (rows <= 0 || index < 0) return ImVec2(0, 0);
     const int col = index % atlasColumns();
     const int row = index / atlasColumns();
     return ImVec2(static_cast<float>(col * 32) / (atlasColumns() * 32),
@@ -296,7 +286,10 @@ void EditorApp::endStroke() {
 
 void EditorApp::paintAt(int tx, int ty) {
     if (!level_.valid() || tx < 0 || ty < 0 || tx >= level_.width || ty >= level_.height) return;
-    if (selectedMeta_ < 0 || selectedMeta_ >= static_cast<int>(level_.metas.size())) return;
+    if (selectedMeta_ < 0 || selectedMeta_ >= static_cast<int>(level_.metas.size())) {
+        setStatus("Pick a tile in the palette first, or use Erase/right-click.", true);
+        return;
+    }
     u16 value = static_cast<u16>(selectedMeta_ & level_.indexMask);
     if (flipH_) value = static_cast<u16>(value | 0x4000);
     if (flipV_) value = static_cast<u16>(value | 0x8000);
@@ -343,7 +336,130 @@ void EditorApp::pickAt(int tx, int ty) {
     selectedMeta_ = v & level_.indexMask;
     flipH_ = (v & 0x4000) != 0;
     flipV_ = (v & 0x8000) != 0;
-    if (selectedMeta_ >= static_cast<int>(level_.metas.size())) selectedMeta_ = 0;
+    if (selectedMeta_ >= static_cast<int>(level_.metas.size())) selectedMeta_ = -1;
+}
+
+bool EditorApp::hasSelection() const {
+    return selX0_ >= 0 && selY0_ >= 0 && selX1_ >= selX0_ && selY1_ >= selY0_;
+}
+
+void EditorApp::clearSelection() {
+    selX0_ = selY0_ = selX1_ = selY1_ = -1;
+}
+
+void EditorApp::normalizeSelection() {
+    if (!level_.valid()) {
+        clearSelection();
+        return;
+    }
+    if (selX0_ > selX1_) std::swap(selX0_, selX1_);
+    if (selY0_ > selY1_) std::swap(selY0_, selY1_);
+    selX0_ = std::clamp(selX0_, 0, level_.width - 1);
+    selX1_ = std::clamp(selX1_, 0, level_.width - 1);
+    selY0_ = std::clamp(selY0_, 0, level_.height - 1);
+    selY1_ = std::clamp(selY1_, 0, level_.height - 1);
+}
+
+void EditorApp::pushUndoSnapshot(const std::vector<u16>& before) {
+    undoStack_.push_back(before);
+    if (undoStack_.size() > 64) undoStack_.erase(undoStack_.begin());
+    redoStack_.clear();
+    dirty_ = true;
+}
+
+void EditorApp::deleteSelection() {
+    if (!level_.valid() || !hasSelection()) return;
+    normalizeSelection();
+    std::vector<u16> before = level_.tiles;
+    bool changed = false;
+    for (int y = selY0_; y <= selY1_; ++y) {
+        for (int x = selX0_; x <= selX1_; ++x) {
+            u16& t = level_.tiles[static_cast<std::size_t>(y) * level_.width + x];
+            if (t != 0) {
+                t = 0;
+                changed = true;
+            }
+        }
+    }
+    if (!changed) return;
+    pushUndoSnapshot(before);
+    rebuildLevelImage();
+    setStatus("Cleared the selected area.");
+}
+
+void EditorApp::fillSelection() {
+    if (!level_.valid() || !hasSelection()) return;
+    if (selectedMeta_ < 0 || selectedMeta_ >= static_cast<int>(level_.metas.size())) {
+        setStatus("Select a tile in the palette before filling.", true);
+        return;
+    }
+    normalizeSelection();
+    u16 value = static_cast<u16>(selectedMeta_ & level_.indexMask);
+    if (flipH_) value = static_cast<u16>(value | 0x4000);
+    if (flipV_) value = static_cast<u16>(value | 0x8000);
+    std::vector<u16> before = level_.tiles;
+    bool changed = false;
+    for (int y = selY0_; y <= selY1_; ++y) {
+        for (int x = selX0_; x <= selX1_; ++x) {
+            u16& t = level_.tiles[static_cast<std::size_t>(y) * level_.width + x];
+            if (t != value) {
+                t = value;
+                changed = true;
+            }
+        }
+    }
+    if (!changed) return;
+    pushUndoSnapshot(before);
+    rebuildLevelImage();
+    setStatus("Filled the selected area.");
+}
+
+void EditorApp::copySelection() {
+    if (!level_.valid() || !hasSelection()) return;
+    normalizeSelection();
+    clipW_ = selX1_ - selX0_ + 1;
+    clipH_ = selY1_ - selY0_ + 1;
+    clipboard_.assign(static_cast<std::size_t>(clipW_) * clipH_, 0);
+    for (int y = 0; y < clipH_; ++y) {
+        for (int x = 0; x < clipW_; ++x) {
+            clipboard_[static_cast<std::size_t>(y) * clipW_ + x] =
+                level_.tiles[static_cast<std::size_t>(selY0_ + y) * level_.width +
+                             (selX0_ + x)];
+        }
+    }
+    setStatus("Copied " + std::to_string(clipW_) + " x " + std::to_string(clipH_) +
+              " tiles.");
+}
+
+void EditorApp::pasteClipboard(int tx, int ty) {
+    if (!level_.valid() || clipboard_.empty() || clipW_ <= 0 || clipH_ <= 0) return;
+    if (tx < 0 || ty < 0 || tx >= level_.width || ty >= level_.height) {
+        setStatus("Move the cursor over the level to paste.", true);
+        return;
+    }
+    std::vector<u16> before = level_.tiles;
+    pushUndoSnapshot(before);
+    for (int y = 0; y < clipH_; ++y) {
+        for (int x = 0; x < clipW_; ++x) {
+            const int dx = tx + x;
+            const int dy = ty + y;
+            if (dx < 0 || dy < 0 || dx >= level_.width || dy >= level_.height) continue;
+            level_.tiles[static_cast<std::size_t>(dy) * level_.width + dx] =
+                clipboard_[static_cast<std::size_t>(y) * clipW_ + x];
+        }
+    }
+    selX0_ = tx;
+    selY0_ = ty;
+    selX1_ = std::min(tx + clipW_ - 1, level_.width - 1);
+    selY1_ = std::min(ty + clipH_ - 1, level_.height - 1);
+    rebuildLevelImage();
+    setStatus("Pasted tiles at " + std::to_string(tx) + "," + std::to_string(ty) + ".");
+}
+
+void EditorApp::requestFit() {
+    fitRequest_ = true;
+    fitWhole_ = true;
+    autoFitFrames_ = 2;
 }
 
 void EditorApp::undo() {
@@ -409,7 +525,7 @@ void EditorApp::drawMenuBar() {
     if (ImGui::BeginMenu("View")) {
         ImGui::MenuItem("Tile grid", nullptr, &showGrid_);
         ImGui::MenuItem("Background scenery", nullptr, &showBackground_);
-        if (ImGui::MenuItem("Fit level to window", "F")) { autoFitFrames_ = 2; fitWhole_ = true; }
+        if (ImGui::MenuItem("Fit level to window", "F")) requestFit();
         ImGui::EndMenu();
     }
     if (ImGui::BeginMenu("Help")) {
@@ -443,7 +559,8 @@ void EditorApp::drawToolbar() {
         rebuildLevelImage();
     }
     ImGui::SameLine();
-    if (ImGui::Button("Fit")) { autoFitFrames_ = 2; fitWhole_ = true; }
+    if (ImGui::Button("Fit")) requestFit();
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Fit the level (press again to restore the previous zoom)");
     ImGui::SameLine();
     ImGui::TextDisabled("Zoom %.0f%%", zoom_ * 100.0f);
     ImGui::SameLine();
@@ -568,6 +685,19 @@ void EditorApp::drawCanvas() {
         return;
     }
 
+    if (fitRequest_) {
+        fitRequest_ = false;
+        autoFitFrames_ = 0;
+        if (fitted_) {
+            // Second click on Fit returns to the zoom used before fitting.
+            zoom_ = std::clamp(preFitZoom_, 0.05f, 4.0f);
+            fitted_ = false;
+        } else {
+            preFitZoom_ = zoom_;
+            fitView(view);
+            fitted_ = true;
+        }
+    }
     if (autoFitFrames_ > 0) {
         if (fitWhole_) fitView(view);
         else fitHeightView(view);
@@ -597,6 +727,7 @@ void EditorApp::drawCanvas() {
     // cursor when the content is larger than the viewport.
     if (inside && io.MouseWheel != 0.0f) {
         autoFitFrames_ = 0;
+        fitted_ = false;
         const float oldZoom = zoom_;
         float newZoom = zoom_ * std::pow(1.18f, io.MouseWheel);
         newZoom = std::clamp(newZoom, 0.05f, 4.0f);
@@ -659,36 +790,81 @@ void EditorApp::drawCanvas() {
         }
     }
 
+    // Painting and area selection.
+    const bool canEdit = level_.info.visual && !space;
+    const bool paintReady =
+        selectedMeta_ >= 0 && selectedMeta_ < static_cast<int>(level_.metas.size());
+    // Dragging with no tile picked (or with the Select tool, or Shift held)
+    // draws a marquee instead of doing nothing.
+    const bool selectMode = tool_ == Tool::Select || io.KeyShift ||
+                            (tool_ == Tool::Paint && !paintReady);
+
     // Hover rectangle.
-    if (tx >= 0 && ty >= 0) {
+    if (tx >= 0 && ty >= 0 && !selectMode) {
         const ImVec2 a(imagePos.x + tx * 32 * zoom_, imagePos.y + ty * 32 * zoom_);
         const ImVec2 b(a.x + 32 * zoom_, a.y + 32 * zoom_);
         dl->AddRect(a, b, IM_COL32(255, 210, 90, 220), 0.0f, 0, 2.0f);
     }
 
-    // Painting.
-    const bool canEdit = level_.info.visual && !space;
-    if (canEdit && inside && tx >= 0 && ty >= 0) {
-        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-            if (io.KeyAlt || tool_ == Tool::Picker) {
-                pickAt(tx, ty);
-            } else {
+    // Clamp the pointer into the level so a drag that leaves the image still
+    // updates the marquee instead of freezing.
+    int sx = tx, sy = ty;
+    if (selecting_ && zoom_ > 0.0f) {
+        const float px = std::clamp((io.MousePos.x - imagePos.x) / zoom_, 0.0f,
+                                    static_cast<float>(level_.pixelWidth() - 1));
+        const float py = std::clamp((io.MousePos.y - imagePos.y) / zoom_, 0.0f,
+                                    static_cast<float>(level_.pixelHeight() - 1));
+        sx = static_cast<int>(px) / 32;
+        sy = static_cast<int>(py) / 32;
+    }
+
+    if (canEdit) {
+        const bool selectClick =
+            inside && sx >= 0 && sy >= 0 &&
+            (ImGui::IsMouseClicked(ImGuiMouseButton_Left) ||
+             (tool_ == Tool::Select && ImGui::IsMouseClicked(ImGuiMouseButton_Right)));
+        if (selectMode && selectClick) {
+            selX0_ = selX1_ = sx;
+            selY0_ = selY1_ = sy;
+            selecting_ = true;
+        } else if (!selecting_ && inside && tx >= 0 && ty >= 0) {
+            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                if (io.KeyAlt || tool_ == Tool::Picker) {
+                    pickAt(tx, ty);
+                } else {
+                    beginStroke();
+                    if (tool_ == Tool::Erase) eraseAt(tx, ty);
+                    else paintAt(tx, ty);
+                }
+            }
+            if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
                 beginStroke();
+                eraseAt(tx, ty);
+            }
+            if (strokeActive_ && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&
+                !io.KeyAlt && tool_ != Tool::Picker) {
                 if (tool_ == Tool::Erase) eraseAt(tx, ty);
                 else paintAt(tx, ty);
             }
+            if (strokeActive_ && ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
+                eraseAt(tx, ty);
+            }
         }
-        if (ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
-            beginStroke();
-            eraseAt(tx, ty);
-        }
-        if (strokeActive_ && ImGui::IsMouseDown(ImGuiMouseButton_Left) &&
-            !io.KeyAlt && tool_ != Tool::Picker) {
-            if (tool_ == Tool::Erase) eraseAt(tx, ty);
-            else paintAt(tx, ty);
-        }
-        if (strokeActive_ && ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
-            eraseAt(tx, ty);
+        if (selecting_) {
+            if (ImGui::IsMouseDown(ImGuiMouseButton_Left) ||
+                ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
+                selX1_ = sx;
+                selY1_ = sy;
+            }
+            if (!ImGui::IsMouseDown(ImGuiMouseButton_Left) &&
+                !ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
+                selecting_ = false;
+                normalizeSelection();
+                if (hasSelection()) {
+                    setStatus("Selection " + std::to_string(selX1_ - selX0_ + 1) + " x " +
+                              std::to_string(selY1_ - selY0_ + 1) + " tiles.");
+                }
+            }
         }
     }
     if (strokeActive_ && (!ImGui::IsMouseDown(ImGuiMouseButton_Left) ||
@@ -699,6 +875,49 @@ void EditorApp::drawCanvas() {
     if (strokeActive_ && !ImGui::IsMouseDown(ImGuiMouseButton_Left) &&
         !ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
         endStroke();
+    }
+
+    // Selection marquee: the area is tinted and outlined with marching ants,
+    // like Lunar Magic, so it is obvious which tiles are selected.
+    if (hasSelection()) {
+        const ImVec2 a(imagePos.x + selX0_ * 32 * zoom_, imagePos.y + selY0_ * 32 * zoom_);
+        const ImVec2 b(imagePos.x + (selX1_ + 1) * 32 * zoom_,
+                       imagePos.y + (selY1_ + 1) * 32 * zoom_);
+        dl->AddRectFilled(a, b, IM_COL32(40, 95, 205, 95));
+        dl->AddRectFilled(a, b, IM_COL32(0, 0, 0, 55));
+
+        const float dash = 6.0f;
+        const float gap = 4.0f;
+        const float period = dash + gap;
+        const float phase = static_cast<float>(std::fmod(ImGui::GetTime() * 18.0, period));
+        auto dashedLine = [&](ImVec2 p0, ImVec2 p1, ImU32 col) {
+            const float dx = p1.x - p0.x;
+            const float dy = p1.y - p0.y;
+            const float len = std::sqrt(dx * dx + dy * dy);
+            if (len <= 0.0f) return;
+            const float ux = dx / len;
+            const float uy = dy / len;
+            for (float t = -phase; t < len; t += period) {
+                const float s = std::max(t, 0.0f);
+                const float e = std::min(t + dash, len);
+                if (e <= s) continue;
+                dl->AddLine(ImVec2(p0.x + ux * s, p0.y + uy * s),
+                            ImVec2(p0.x + ux * e, p0.y + uy * e), col, 1.0f);
+            }
+        };
+        const ImVec2 corners[4] = {ImVec2(a.x - 1, a.y - 1), ImVec2(b.x + 1, a.y - 1),
+                                   ImVec2(b.x + 1, b.y + 1), ImVec2(a.x - 1, b.y + 1)};
+        const ImVec2 inner[4] = {a, ImVec2(b.x, a.y), b, ImVec2(a.x, b.y)};
+        for (int i = 0; i < 4; ++i) {
+            const ImVec2 p0 = corners[i];
+            const ImVec2 p1 = corners[(i + 1) % 4];
+            dashedLine(p0, p1, IM_COL32(10, 10, 12, 230));
+        }
+        for (int i = 0; i < 4; ++i) {
+            const ImVec2 p0 = inner[i];
+            const ImVec2 p1 = inner[(i + 1) % 4];
+            dashedLine(p0, p1, IM_COL32(255, 255, 255, 240));
+        }
     }
 
     dl->PopClipRect();
@@ -748,16 +967,50 @@ void EditorApp::drawToolPanel() {
     if (ImGui::RadioButton("Pick", tool_ == Tool::Picker)) tool_ = Tool::Picker;
     ImGui::SameLine();
     if (ImGui::RadioButton("Erase", tool_ == Tool::Erase)) tool_ = Tool::Erase;
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Select", tool_ == Tool::Select)) tool_ = Tool::Select;
+    if (tool_ == Tool::Select) {
+        ImGui::TextDisabled("Drag on the map to select an area.");
+    } else if (tool_ == Tool::Paint &&
+               (selectedMeta_ < 0 ||
+                selectedMeta_ >= static_cast<int>(level_.metas.size()))) {
+        ImGui::TextDisabled("No tile picked: drag to select an area.");
+    }
 
     ImGui::Spacing();
     ImGui::Checkbox("Flip horizontally (X)", &flipH_);
     ImGui::Checkbox("Flip vertically (Y)", &flipV_);
 
+    if (hasSelection()) {
+        ImGui::Spacing();
+        ImGui::Text("Area: %d x %d tiles", selX1_ - selX0_ + 1, selY1_ - selY0_ + 1);
+        const float w = (ImGui::GetContentRegionAvail().x - 3 * 6.0f) / 4.0f;
+        if (ImGui::Button("Fill", ImVec2(w, 0))) fillSelection();
+        ImGui::SameLine();
+        if (ImGui::Button("Clear", ImVec2(w, 0))) deleteSelection();
+        ImGui::SameLine();
+        if (ImGui::Button("Copy", ImVec2(w, 0))) copySelection();
+        ImGui::SameLine();
+        if (ImGui::Button("Deselect", ImVec2(w, 0))) clearSelection();
+        if (!clipboard_.empty()) {
+            if (ImGui::Button("Paste here", ImVec2(-1, 0))) {
+                const int px = cursorX_ >= 0 ? cursorX_ : selX0_;
+                const int py = cursorY_ >= 0 ? cursorY_ : selY0_;
+                pasteClipboard(px, py);
+            }
+        }
+    }
+
     if (visual) {
         ImGui::Spacing();
-        ImGui::Text("Selected tile: %03X", selectedMeta_);
+        if (selectedMeta_ < 0 || selectedMeta_ >= static_cast<int>(level_.metas.size())) {
+            ImGui::TextDisabled("Selected tile: none");
+        } else {
+            ImGui::Text("Selected tile: %03X", selectedMeta_);
+        }
         const int rows = atlasRows();
-        if (atlasTex_.valid() && rows > 0) {
+        if (atlasTex_.valid() && rows > 0 && selectedMeta_ >= 0 &&
+            selectedMeta_ < static_cast<int>(level_.metas.size())) {
             const ImVec2 uv0 = atlasUv(selectedMeta_);
             const ImVec2 uv1 = ImVec2(uv0.x + 32.0f / (atlasColumns() * 32),
                                       uv0.y + 32.0f / (rows * 32));
@@ -791,16 +1044,18 @@ void EditorApp::drawToolPanel() {
                 }
             }
             // Selection marker.
-            const int selCol = selectedMeta_ % atlasColumns();
-            const int selRow = selectedMeta_ / atlasColumns();
-            ImDrawList* dl = ImGui::GetWindowDrawList();
-            dl->AddRect(ImVec2(a.x + selCol * 32, a.y + selRow * 32),
-                        ImVec2(a.x + selCol * 32 + 32, a.y + selRow * 32 + 32),
-                        IM_COL32(80, 200, 255, 255), 0, 0, 2.5f);
-            if (paletteScrollFrames_ > 0) {
-                const float target = selRow * 32.0f - panelHeight * 0.5f + 16.0f;
-                ImGui::SetScrollY(std::clamp(target, 0.0f, atlasH));
-                --paletteScrollFrames_;
+            if (selectedMeta_ >= 0) {
+                const int selCol = selectedMeta_ % atlasColumns();
+                const int selRow = selectedMeta_ / atlasColumns();
+                ImDrawList* dl = ImGui::GetWindowDrawList();
+                dl->AddRect(ImVec2(a.x + selCol * 32, a.y + selRow * 32),
+                            ImVec2(a.x + selCol * 32 + 32, a.y + selRow * 32 + 32),
+                            IM_COL32(80, 200, 255, 255), 0, 0, 2.5f);
+                if (paletteScrollFrames_ > 0) {
+                    const float target = selRow * 32.0f - panelHeight * 0.5f + 16.0f;
+                    ImGui::SetScrollY(std::clamp(target, 0.0f, atlasH));
+                    --paletteScrollFrames_;
+                }
             }
         }
         ImGui::EndChild();
@@ -854,6 +1109,11 @@ void EditorApp::drawStatusBar() {
     if (level_.valid()) {
         ImGui::TextDisabled("|  %d,%d  |  %s  |  zoom %.0f%%", cursorX_, cursorY_,
                             dirty_ ? "modified" : "saved", zoom_ * 100.0f);
+        if (hasSelection()) {
+            ImGui::SameLine();
+            ImGui::TextColored(ImVec4(0.55f, 0.8f, 1.0f, 1.0f), "|  sel %dx%d",
+                               selX1_ - selX0_ + 1, selY1_ - selY0_ + 1);
+        }
     }
 }
 
@@ -871,7 +1131,23 @@ void EditorApp::draw() {
             else undo();
         }
         if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_Y)) redo();
-        if (ImGui::IsKeyPressed(ImGuiKey_F)) { autoFitFrames_ = 2; fitWhole_ = true; }
+        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_A)) {
+            if (level_.valid()) {
+                selX0_ = 0;
+                selY0_ = 0;
+                selX1_ = level_.width - 1;
+                selY1_ = level_.height - 1;
+            }
+        }
+        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_C)) copySelection();
+        if (io.KeyCtrl && ImGui::IsKeyPressed(ImGuiKey_V)) {
+            const int px = cursorX_ >= 0 ? cursorX_ : (hasSelection() ? selX0_ : 0);
+            const int py = cursorY_ >= 0 ? cursorY_ : (hasSelection() ? selY0_ : 0);
+            pasteClipboard(px, py);
+        }
+        if (ImGui::IsKeyPressed(ImGuiKey_Delete)) deleteSelection();
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape)) clearSelection();
+        if (ImGui::IsKeyPressed(ImGuiKey_F)) requestFit();
     }
 
     drawMenuBar();

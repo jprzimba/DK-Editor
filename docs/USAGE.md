@@ -54,17 +54,19 @@ terrain map alone.
 The zoom range is 5% to 400%. When a level is wider or taller than the canvas,
 native scrollbars appear at the bottom and right edges; you can drag them to move
 through the level without changing the zoom. The default view is 100% (or
-height-fit for very tall levels). **Fit** shows the entire level.
+height-fit for very tall levels). **Fit** (`F`) shows the entire level; press it
+again to return to the zoom you had before.
 
 ## Selecting a tile
 
 The **Tile palette** on the right shows every 32x32 metatile for the current
 level, rendered with the level's own tileset and palette.
 
-- Click a cell to select it.
-- The large preview under **Selected tile** shows the active tile.
-- Hovering a cell outlines it.
-- The blue border marks the current selection.
+Nothing is selected when a level loads. Click a cell to select it; the large
+preview under **Selected tile** shows the active tile. Hovering a cell outlines
+it, and the blue border marks the current selection. Paint does nothing until a
+tile is picked (the status line tells you), but **Erase** and right-drag always
+work.
 
 ## Painting
 
@@ -73,6 +75,7 @@ level, rendered with the level's own tileset and palette.
 | **Paint** | Left click/drag writes the selected tile. |
 | **Pick** | Left click reads the tile under the cursor. |
 | **Erase** | Left click/drag writes tile 0 (empty). |
+| **Select** | Drag to mark a rectangular area, like Lunar Magic. |
 
 Right click/drag always erases, regardless of the active tool. Alt + left click
 always picks.
@@ -81,6 +84,31 @@ always picks.
 sets bit 15. The picker updates both checkboxes from the tile under the cursor.
 
 Painting only rebuilds the affected 32x32 pixels, so large levels stay responsive.
+
+## Area selection
+
+Choose **Select** and drag a rectangle on the canvas. The selected tiles are
+tinted blue and surrounded by an animated dashed marquee, so you can see exactly
+which tiles are affected; the size appears in the Tools panel and the status bar.
+
+Dragging also creates a marquee in two convenient cases:
+
+- no tile is picked yet, so a paint drag would do nothing;
+- you hold `Shift` while dragging with any tool.
+
+With the **Select** tool both mouse buttons draw the marquee.
+
+| Action | Input |
+| --- | --- |
+| Select a rectangle | Drag with the **Select** tool |
+| Select the whole level | `Ctrl+A` |
+| Fill with the selected tile | **Fill** |
+| Clear the area | **Clear** or `Delete` |
+| Copy the area | **Copy** or `Ctrl+C` |
+| Paste under the cursor | `Ctrl+V` or **Paste here** |
+| Remove the marquee | **Deselect** or `Esc` |
+
+Each fill, clear and paste is a single undo step.
 
 ## Undo and redo
 

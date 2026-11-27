@@ -103,20 +103,24 @@ repository.
 
 | Action | Input |
 | --- | --- |
-| Paint selected tile | Left click / drag |
+| Paint selected tile | Left click / drag (after picking a tile) |
 | Erase tile | Right click / drag, or the Erase tool |
 | Pick tile under cursor | Alt + left click, or the Pick tool |
+| Select an area | **Select** tool, then drag (or drag with no tile picked, or `Shift`+drag) |
+| Fill / clear / copy / paste area | Tools panel, `Delete`, `Ctrl+C`, `Ctrl+V` |
 | Pan | Middle-drag, Space + left-drag, or the canvas scrollbars |
 | Zoom | Mouse wheel |
-| Fit level | `F` or the **Fit** button |
-| Toggle grid | **Grid** checkbox |
+| Fit level (press again to restore) | `F` or the **Fit** button |
+| Toggle grid / scenery | **Grid** / **Background** checkboxes |
 | Undo / redo | `Ctrl+Z` / `Ctrl+Y` |
 | Open / save | `Ctrl+O` / `Ctrl+S` |
 | Save as | `Ctrl+Shift+S` |
 | Flip painted tile | **Flip horizontally/vertically** |
 
 The right-hand tile palette shows every 32x32 metatile of the current level. Click
-a cell to select it.
+a cell to select it; nothing is selected when a level opens, so Paint stays idle
+until you choose a tile. The **Select** tool draws a tinted, animated marquee
+whose tiles can be filled, cleared, copied and pasted as one undo step each.
 
 ## Tests
 

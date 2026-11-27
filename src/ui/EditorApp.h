@@ -17,6 +17,7 @@ enum class Tool {
     Paint,
     Picker,
     Erase,
+    Select,
 };
 
 class EditorApp {
@@ -56,6 +57,17 @@ private:
     void redo();
     void setStatus(const std::string& text, bool error = false);
 
+    // Rectangle selection, Lunar Magic style.
+    bool hasSelection() const;
+    void clearSelection();
+    void normalizeSelection();
+    void deleteSelection();
+    void fillSelection();
+    void copySelection();
+    void pasteClipboard(int tx, int ty);
+    void pushUndoSnapshot(const std::vector<u16>& before);
+    void requestFit();
+
     int atlasColumns() const { return 8; }
     int atlasRows() const;
     ImVec2 atlasUv(int index) const; // returns uv0, use +32px for uv1
@@ -80,18 +92,27 @@ private:
     Tool tool_ = Tool::Paint;
     bool flipH_ = false;
     bool flipV_ = false;
-    int selectedMeta_ = 0;
+    int selectedMeta_ = -1;
     bool showGrid_ = true;
     bool showBackground_ = true;
     bool showCollision_ = false; // reserved
     float zoom_ = 0.5f;
     int autoFitFrames_ = 2;
     bool fitWhole_ = false;
+    bool fitRequest_ = false;
+    bool fitted_ = false;
+    float preFitZoom_ = 1.0f;
     bool pendingScroll_ = false;
     ImVec2 pendingScrollTarget_{0, 0};
     bool dirty_ = false;
     int scrollFrames_ = 0;
     int paletteScrollFrames_ = 0;
+
+    // Selection (tile coordinates, inclusive).
+    int selX0_ = -1, selY0_ = -1, selX1_ = -1, selY1_ = -1;
+    bool selecting_ = false;
+    std::vector<u16> clipboard_;
+    int clipW_ = 0, clipH_ = 0;
 
     bool strokeActive_ = false;
     bool strokeChanged_ = false;
