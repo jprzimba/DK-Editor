@@ -68,11 +68,36 @@ with the code.
 
 ## Next milestone: DKC3 terrain editing
 
-- [ ] Locate the DKC3 level-to-tilemap mapping.
-- [ ] Decode DKC3 Small Data tilemaps.
-- [ ] Identify the tileset and map-chip assets per stage theme.
-- [ ] Render DKC3 terrain with real graphics.
-- [ ] Implement recompression and safe relocation for DKC3 tilemaps.
+### Research notes (2026-11)
+
+- Terrain is stored in 18 "LevelData" bundles (`CaveLevels1/2`, `PierLevels`,
+  `ForestLevels`, ...) in banks `$E0`-`$E8`; each bundle is Big Data compressed
+  and holds the maps for every stage that shares that tileset.
+- Terrain maps are **row-major metatile grids** (32x32 metatiles). `CaveLevels1`
+  decodes to 16896 words = 4 blocks of 96x44 metatiles, each ending in a fully
+  empty right-most column (a clean level boundary). Rendering a block with
+  `M32_Layer1_Level_Cave` + `GFX_Layer1_CaveLevels` produces a coherent cave.
+- Stage config (bank `$FD`, `level_config_table`) is now fully documented:
+  `dw type, db music, dw tilesetConfig, db layout, db palette, db ?, dw camera,
+   db gimmick, dw ?, dw flags, entrance list, destination list`. The layout
+  byte matches the `Horizontal/TallHorizontal/Vertical/Square/...` enum.
+- Each bundle is preceded by a 3-byte-pointer header to its `M32_*` start/end
+  and its `GFX_*` start (encoded as `db lo, db hi, db bank|0x40`).
+- Layer maps are columns of 16 or 32 metatiles (`Horizontal` / `TallHorizontal`)
+  or row-major with 32/64/96 metatiles per row (`Vertical`, `NarrowVertical`,
+  `Square`, `ShipHold`), per `Dkc3VideoLevelLayout*` in DKC3Recomp.
+- A stage's map offset inside its bundle, the layout code, the palette and the
+  background ids are still unidentified.
+- Layer 2/3 tilemaps use the DKC3-specific tilemap compression (Karaage Lab
+  "Tilemap compression format"); a decoder is prototyped in `.research`.
+
+### Tasks
+
+- [ ] Identify the per-stage map offset/layout inside each LevelData bundle.
+- [ ] Identify the stage palette and background ids.
+- [ ] Port the DKC3 tilemap decompressor to `src/core/Compression.*`.
+- [ ] Decode and render Layer 1 (terrain) with the theme M32 and tileset.
+- [ ] Implement save: recompress the bundle, relocate if needed, update pointers.
 - [ ] Add DKC3 vertical/special layout support.
 - [ ] Extend the self-test with DKC3 terrain round-trips.
 
