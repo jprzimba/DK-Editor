@@ -35,9 +35,23 @@ with the code.
 - [x] Paint, pick and erase tools, horizontal/vertical flips.
 - [x] Lunar Magic style rectangular area selection with fill, clear, copy and
       paste, plus `Ctrl+A`, `Ctrl+C`, `Ctrl+V`, `Delete` and `Esc` shortcuts.
-- [x] Item bar under the toolbar with the collectables of each game rendered as
-      icons (bananas, balloons, KONG letters, barrels, coins, cogs, tokens).
+- [x] Sprite/object layer for DKC2 and DKC3: placements are parsed from the
+      per-level lists in bank `$FE`, drawn on the canvas, moved, deleted and
+      added, and written back (the list is relocated inside the bank when it
+      grows).  DKC3 item ids are mapped to the item bar.
+- [ ] Sprite art is not drawn yet: objects are shown as markers.
+- [ ] DKC1 sprite placements are not mapped yet.
 - [x] No tile is pre-selected when a level opens; paint waits for a palette pick.
+
+### Sprite tools
+
+- **Sprites** tool: every placed object is shown as a marker on the canvas.
+- Click a marker to select it and drag to move it.
+- Right-click a marker to delete it.
+- Pick an item in the item bar and click empty canvas to add it (DKC3 ids are
+  mapped; DKC2 ids still need their sprite constant table).
+- Save writes the level's sprite list back; if it grew, the list is relocated to
+  a free run inside bank `$FE` and the level's table entry is updated.
 - [x] Fit toggles between the whole level and the previous zoom.
 - [x] Undo/redo snapshots per level.
 - [x] Targeted 32x32 partial texture upload while painting.

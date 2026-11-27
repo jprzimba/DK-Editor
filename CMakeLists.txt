@@ -44,6 +44,7 @@ set(DKEDITOR_GAME
   src/games/Dkc2.cpp
   src/games/Dkc3.cpp
   src/games/Games.cpp
+  src/games/SpriteData.cpp
 )
 
 set(DKEDITOR_UI

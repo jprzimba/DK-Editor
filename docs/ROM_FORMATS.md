@@ -306,6 +306,16 @@ Data:
 Not implemented yet. The remaining piece is the per-stage map offset and layout
 inside the Big Data "LevelData" bundles (see `TASKS.md`).
 
+### Sprite / object data
+
+- DKC2 and DKC3 keep a 16-bit table at `$FE0000` (file `0x3E0000`) that maps the
+  level id to a block offset inside bank `$FE`.
+- Each object is an 8-byte record: `u16 id`, `u16 x`, `u16 y`, `u16 extra`, with
+  `x`/`y` biased by `0x100`. The list ends with an id of zero.
+- The editor parses, edits and rewrites these lists. When the list grows it is
+  relocated to a zero-filled run in the same bank and the table entry is updated.
+- DKC1 sprite placement is not mapped yet.
+
 ## Safety notes
 
 - Always keep a backup before editing a ROM.

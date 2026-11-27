@@ -18,6 +18,7 @@ enum class Tool {
     Picker,
     Erase,
     Select,
+    Sprites,
 };
 
 class EditorApp {
@@ -134,6 +135,9 @@ private:
     int cursorY_ = -1;
     std::string lastRomDir_;
     int selectedItem_ = -1;
+    int selectedSprite_ = -1;
+    int draggingSprite_ = -1;
+    bool spriteMoved_ = false;
 };
 
 } // namespace dk

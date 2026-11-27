@@ -2,6 +2,7 @@
 
 #include "core/Compression.h"
 #include "core/Graphics.h"
+#include "games/SpriteData.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -377,13 +378,37 @@ bool Dkc3Game::loadLevel(Rom& rom, int levelId, LoadedLevel& out, std::string& e
     // art is not mapped yet receive a themed gradient instead.
     const int paletteId = rom.byte(a + 6);
     out.palette = loadFgbgPalette(rom, paletteId);
+    loadSpriteBlock(rom, levelId, out);
+
     int bgWidth = 0, bgHeight = 0;
     bool hasArt = false;
     if (buildBackground(rom, levelId, out.palette, out.image, bgWidth, bgHeight, hasArt)) {
+        // Grow the canvas so every placed sprite is inside the map view.
+        int extentW = bgWidth;
+        int extentH = bgHeight;
+        for (const SpriteObject& s : out.sprites) {
+            extentW = std::max(extentW, static_cast<int>(s.x) + 96);
+            extentH = std::max(extentH, static_cast<int>(s.y) + 96);
+        }
+        extentW = std::min(16384, (extentW + 31) / 32 * 32);
+        extentH = std::min(16384, (extentH + 31) / 32 * 32);
+        if (extentW > bgWidth || extentH > bgHeight) {
+            std::vector<u32> grown(static_cast<std::size_t>(extentW) * extentH, 0);
+            for (int y = 0; y < extentH; ++y) {
+                const int srcY = std::min(bgHeight - 1, y * bgHeight / extentH);
+                for (int x = 0; x < extentW; ++x) {
+                    grown[static_cast<std::size_t>(y) * extentW + x] =
+                        out.image[static_cast<std::size_t>(srcY) * bgWidth + (x % bgWidth)];
+                }
+            }
+            out.image.swap(grown);
+            bgWidth = extentW;
+            bgHeight = extentH;
+        }
         out.width = bgWidth / 32;
         out.height = bgHeight / 32;
         out.info.note = hasArt
-            ? "Background preview only; DKC3 terrain editing is coming next."
+            ? "Background preview; sprites can be moved with the Sprites tool."
             : "Themed backdrop; this stage's background art is still being mapped.";
     } else {
         out.info.note = "Visual DKC3 editing is not available for this stage yet.";
@@ -445,7 +470,7 @@ bool Dkc3Game::saveLevel(Rom& rom, const LoadedLevel& level, std::string& error)
             wr16(rom.data, p.offset, static_cast<u16>(p.value & 0xFFFF));
         }
     }
-    return true;
+    return saveSpriteBlock(rom, level, error);
 }
 
 } // namespace dk

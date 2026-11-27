@@ -113,6 +113,24 @@ With the **Select** tool both mouse buttons draw the marquee.
 
 Each fill, clear and paste is a single undo step.
 
+## Editing sprites and items
+
+Choose the **Sprites** tool to work with the objects placed in the level
+(enemies, bananas, barrels, coins, ...).
+
+| Action | Input |
+| --- | --- |
+| Select a sprite | Click its marker |
+| Move a sprite | Drag its marker |
+| Delete a sprite | Right-click its marker |
+| Add a sprite | Pick an item in the item bar, then click an empty spot |
+
+DKC2 and DKC3 read their object lists from the per-level table in bank `$FE`.
+Saving writes the list back; if it grew, the list is relocated to free space in
+that bank and the level pointer is updated. DKC3 item ids are mapped for adding;
+DKC2 and DKC1 still need their sprite id tables. Objects are drawn as markers
+until the sprite artwork is mapped.
+
 ## Undo and redo
 
 - `Ctrl+Z` undoes the last stroke.

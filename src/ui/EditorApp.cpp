@@ -154,6 +154,9 @@ bool EditorApp::loadLevel(int id) {
     fitRequest_ = false;
     fitted_ = false;
     pendingScroll_ = false;
+    selectedSprite_ = -1;
+    draggingSprite_ = -1;
+    spriteMoved_ = false;
     clearSelection();
 
     std::string err;
@@ -762,6 +765,27 @@ std::vector<ItemDef> itemsForGame(GameKind kind) {
     }
     return {};
 }
+
+// Sprite ids used when placing a new object.  Only DKC3 ids are mapped so far.
+u16 spriteIdForItem(ItemIcon icon, GameKind kind) {
+    if (kind != GameKind::Dkc3) return 0;
+    switch (icon) {
+    case ItemIcon::Banana: return 0x014C;
+    case ItemIcon::Bunch: return 0x0298;
+    case ItemIcon::BalloonRed:
+    case ItemIcon::BalloonGreen:
+    case ItemIcon::BalloonBlue: return 0x029C;
+    case ItemIcon::KongLetter: return 0x0294;
+    case ItemIcon::BarrelDk: return 0x02CC;
+    case ItemIcon::BarrelTnt: return 0x02D0;
+    case ItemIcon::BarrelStar: return 0x02BC;
+    case ItemIcon::BarrelSteel: return 0x02B8;
+    case ItemIcon::BearCoin: return 0x0284;
+    case ItemIcon::BonusCoin: return 0x028C;
+    case ItemIcon::Cog: return 0x0290;
+    default: return 0;
+    }
+}
 } // namespace
 
 void EditorApp::drawItemBar() {
@@ -1025,6 +1049,102 @@ void EditorApp::drawCanvas() {
         }
     }
 
+    // Sprites: draw markers on top of the level image and handle editing.
+    const ImVec2 mouse = io.MousePos;
+    if (!level_.sprites.empty() || tool_ == Tool::Sprites) {
+        const float hitRadius = std::max(10.0f, 10.0f * zoom_);
+        int hoverSprite = -1;
+        if (tool_ == Tool::Sprites && inside) {
+            float best = hitRadius;
+            for (int i = 0; i < static_cast<int>(level_.sprites.size()); ++i) {
+                const SpriteObject& o = level_.sprites[i];
+                const ImVec2 p(imagePos.x + o.x * zoom_, imagePos.y + o.y * zoom_);
+                const float d = std::sqrt((mouse.x - p.x) * (mouse.x - p.x) +
+                                          (mouse.y - p.y) * (mouse.y - p.y));
+                if (d < best) {
+                    best = d;
+                    hoverSprite = i;
+                }
+            }
+        }
+
+        if (tool_ == Tool::Sprites && inside) {
+            if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+                if (hoverSprite >= 0) {
+                    selectedSprite_ = hoverSprite;
+                    draggingSprite_ = hoverSprite;
+                    spriteMoved_ = false;
+                } else if (selectedItem_ >= 0 && !itemsForGame(rom_.game).empty()) {
+                    // Place a new sprite of the selected item (DKC3 ids only).
+                    const u16 id = spriteIdForItem(itemsForGame(rom_.game)[selectedItem_].icon,
+                                                   rom_.game);
+                    if (id != 0) {
+                        SpriteObject obj;
+                        obj.id = id;
+                        obj.x = static_cast<u16>(std::clamp(
+                            static_cast<int>((mouse.x - imagePos.x) / zoom_), 0,
+                            level_.pixelWidth() - 1));
+                        obj.y = static_cast<u16>(std::clamp(
+                            static_cast<int>((mouse.y - imagePos.y) / zoom_), 0,
+                            level_.pixelHeight() - 1));
+                        level_.sprites.push_back(obj);
+                        selectedSprite_ = static_cast<int>(level_.sprites.size()) - 1;
+                        dirty_ = true;
+                        setStatus("Sprite added. Press Save ROM to write it.");
+                    } else {
+                        setStatus("No sprite id mapped for this item in this game yet.", true);
+                    }
+                } else {
+                    selectedSprite_ = -1;
+                }
+            }
+            if (ImGui::IsMouseClicked(ImGuiMouseButton_Right) && hoverSprite >= 0) {
+                level_.sprites.erase(level_.sprites.begin() + hoverSprite);
+                selectedSprite_ = -1;
+                dirty_ = true;
+                setStatus("Sprite deleted. Press Save ROM to write it.");
+            }
+            if (draggingSprite_ >= 0 && draggingSprite_ < static_cast<int>(level_.sprites.size()) &&
+                ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                SpriteObject& o = level_.sprites[draggingSprite_];
+                o.x = static_cast<u16>(std::clamp(
+                    static_cast<int>((mouse.x - imagePos.x) / zoom_), 0,
+                    level_.pixelWidth() - 1));
+                o.y = static_cast<u16>(std::clamp(
+                    static_cast<int>((mouse.y - imagePos.y) / zoom_), 0,
+                    level_.pixelHeight() - 1));
+                spriteMoved_ = true;
+            }
+            if (draggingSprite_ >= 0 && !ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
+                draggingSprite_ = -1;
+                if (spriteMoved_) {
+                    dirty_ = true;
+                    setStatus("Sprite moved. Press Save ROM to write it.");
+                }
+            }
+        }
+
+        for (int i = 0; i < static_cast<int>(level_.sprites.size()); ++i) {
+            const SpriteObject& o = level_.sprites[i];
+            const ImVec2 p(imagePos.x + o.x * zoom_, imagePos.y + o.y * zoom_);
+            if (p.x < clip0.x - 8 || p.x > clip1.x + 8 || p.y < clip0.y - 8 ||
+                p.y > clip1.y + 8) {
+                continue;
+            }
+            const ImU32 body = (i == selectedSprite_) ? IM_COL32(255, 210, 90, 235)
+                                                      : IM_COL32(90, 200, 255, 200);
+            const float r = std::max(4.0f, 5.0f * zoom_);
+            dl->AddQuadFilled(ImVec2(p.x, p.y - r), ImVec2(p.x + r, p.y),
+                              ImVec2(p.x, p.y + r), ImVec2(p.x - r, p.y), body);
+            dl->AddQuad(ImVec2(p.x, p.y - r), ImVec2(p.x + r, p.y),
+                        ImVec2(p.x, p.y + r), ImVec2(p.x - r, p.y),
+                        IM_COL32(10, 10, 12, 220), 1.0f);
+            if (i == hoverSprite) {
+                ImGui::SetTooltip("Sprite %04X at %d,%d", o.id, o.x, o.y);
+            }
+        }
+    }
+
     // Painting and area selection.
     const bool canEdit = level_.info.visual && !space;
     const bool paintReady =
@@ -1202,8 +1322,12 @@ void EditorApp::drawToolPanel() {
     if (ImGui::RadioButton("Pick", tool_ == Tool::Picker)) tool_ = Tool::Picker;
     ImGui::SameLine();
     if (ImGui::RadioButton("Erase", tool_ == Tool::Erase)) tool_ = Tool::Erase;
-    ImGui::SameLine();
     if (ImGui::RadioButton("Select", tool_ == Tool::Select)) tool_ = Tool::Select;
+    ImGui::SameLine();
+    if (ImGui::RadioButton("Sprites", tool_ == Tool::Sprites)) tool_ = Tool::Sprites;
+    if (tool_ == Tool::Sprites) {
+        ImGui::TextDisabled("Click a sprite to select, drag to move, right-click to delete.");
+    }
     if (tool_ == Tool::Select) {
         ImGui::TextDisabled("Drag on the map to select an area.");
     } else if (tool_ == Tool::Paint &&

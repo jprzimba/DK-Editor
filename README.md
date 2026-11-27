@@ -113,6 +113,8 @@ repository.
 | Erase tile | Right click / drag, or the Erase tool |
 | Pick tile under cursor | Alt + left click, or the Pick tool |
 | Select an area | **Select** tool, then drag (or drag with no tile picked, or `Shift`+drag) |
+| Edit sprites | **Sprites** tool: click to select, drag to move, right-click to delete |
+| Add a sprite | Pick an item in the item bar, then click empty canvas (DKC3) |
 | Fill / clear / copy / paste area | Tools panel, `Delete`, `Ctrl+C`, `Ctrl+V` |
 | Pan | Middle-drag, Space + left-drag, or the canvas scrollbars |
 | Zoom | Mouse wheel |

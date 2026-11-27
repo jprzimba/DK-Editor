@@ -1,5 +1,7 @@
 #include "games/Dkc2.h"
 
+#include "games/SpriteData.h"
+
 #include <algorithm>
 #include <array>
 #include <cstring>
@@ -540,6 +542,7 @@ bool Dkc2Game::loadLevel(Rom& rom, int levelId, LoadedLevel& out, std::string& e
     buildLevelImage(out.image, out.width, out.height, out.tiles, out.indexMask,
                     out.metas, out.charset, out.palette, out.background,
                     out.backgroundBottom, out.bgImage, out.bgWidth, out.bgHeight);
+    loadSpriteBlock(rom, levelId, out);
     return true;
 }
 
@@ -608,7 +611,7 @@ bool Dkc2Game::saveLevel(Rom& rom, const LoadedLevel& level, std::string& error)
 
     ctx->tilemapFile = writeAt;
     ctx->compressedSize = slot;
-    return true;
+    return saveSpriteBlock(rom, level, error);
 }
 
 } // namespace dk

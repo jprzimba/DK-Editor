@@ -34,6 +34,15 @@ struct LevelProperty {
     int displayOffset = 0; // value shown = value + displayOffset
 };
 
+// One placed sprite/object in a level.
+struct SpriteObject {
+    u16 id = 0;
+    u16 x = 0;
+    u16 y = 0;
+    u16 extra = 0;
+    std::size_t offset = 0; // ROM offset of the 8-byte record (0 for new objects)
+};
+
 struct LoadedLevel {
     LevelEntry info;
     int width = 0;
@@ -52,6 +61,12 @@ struct LoadedLevel {
     std::vector<u32> image; // width*32 x height*32, RGBA
     std::vector<LevelProperty> properties;
     std::shared_ptr<LevelContext> context;
+
+    // Placed sprites/objects and their save bookkeeping.
+    std::vector<SpriteObject> sprites;
+    std::size_t spriteTableEntry = 0;  // ROM offset of the 16-bit block pointer
+    std::size_t spriteTableBank = 0;   // file offset of the sprite data bank
+    std::size_t spriteLimit = 0;       // end of the level's sprite block region
 
     int pixelWidth() const { return width * 32; }
     int pixelHeight() const { return height * 32; }
