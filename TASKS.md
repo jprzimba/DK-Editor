@@ -22,9 +22,9 @@ with the code.
 - [x] DKC2 recompression, free-space relocation and pointer-table update.
 - [x] DKC2 double-save without reload after relocation.
 - [x] DKC3 stage-settings editing.
-- [x] DKC3 background preview: the stage backdrop is decoded from the DKC3
-      tilemap compression and its own FGBG palette for cave, forest, riverbank,
-      pipe and lakeside stages (read-only, shown on the canvas).
+- [x] DKC3 background preview: real stage art (tilemap + tileset + FGBG
+      palette) for lakeside, mill, forest, riverbank, mountain, pipe and cave
+      stages, and a themed gradient for the remaining themes.
 - [x] Level canvas with fit, zoom, pan, grid, hover and painting.
 - [x] Native horizontal and vertical canvas scrollbars (no need to zoom out).
 - [x] DKC2 Layer 2 backgrounds: Ship Deck ocean, Ship Mast clouds, Haunted Hall,
@@ -48,9 +48,8 @@ with the code.
 ### Known limitations
 
 - [ ] DKC3 terrain editing is not implemented; only stage settings are editable.
-- [ ] DKC3 background previews cover cave, forest, riverbank, pipe and lakeside
-      stages; snow, factory, mountain, reef and mill still need their asset
-      mapping (see the research notes below).
+- [ ] DKC3 background art is still missing for snow, factory and reef stages;
+      those show a themed gradient for now.
 - [ ] DKC2 levels that share a tilemap are edited together. The UI does not yet
       warn before saving a shared map.
 - [ ] DKC1/DKC2 object, sprite, banana, camera and entrance editing is not

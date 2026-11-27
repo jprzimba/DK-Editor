@@ -49,9 +49,9 @@ LevelProperty byteProp(std::size_t offset, const char* label, int bytes = 1,
 // A background layer: a tilemap plus the 8x8 tileset it references.
 struct Dkc3BgLayer {
     std::size_t map = 0;      // file offset of the tilemap
-    std::size_t mapSize = 0;  // bytes, for uncompressed maps
-    bool mapCompressed = true;
-    std::size_t gfx = 0;  // file offset of the compressed tileset
+    std::size_t mapSize = 0;  // bytes when the map is stored raw
+    std::size_t gfx = 0;      // file offset of the tileset
+    std::size_t gfxSize = 0;  // bytes when the tileset is stored raw
 };
 
 struct Dkc3BgSet {
@@ -59,32 +59,51 @@ struct Dkc3BgSet {
     Dkc3BgLayer front;
 };
 
-// Validated DKC3 backgrounds (tilemap + tileset) per stage theme.
+// Validated DKC3 backgrounds (tilemap + tileset) per stage theme.  The map and
+// the tileset may be stored with different codecs; the loader tries them in
+// order (DKC3 tilemap, Big Data, Small Data, raw).
 const Dkc3BgSet kBgNone{};
 const Dkc3BgSet kBgCave{
-    {}, {0x3275D5, 0, true, 0x32587C}};  // TM/GFX_Layer2_CaveLevels
+    {}, {0x3275D5, 0, 0x32587C}};  // TM/GFX_Layer2_CaveLevels
 const Dkc3BgSet kBgForest{
-    {}, {0x2712B8, 0, true, 0x2717A6}};  // TM/GFX_Layer2_ForestLevels
+    {}, {0x2712B8, 0, 0x2717A6}};  // TM/GFX_Layer2_ForestLevels
 const Dkc3BgSet kBgRiver{
-    {}, {0x288388, 0, true, 0x28861B}};  // TM/GFX_Layer2_RiverbankLevels
+    {}, {0x288388, 0, 0x28861B}};  // TM/GFX_Layer2_RiverbankLevels
+const Dkc3BgSet kBgMill{
+    {}, {0x1DF873, 0, 0x1DFE8F}};  // TM/GFX_Layer2_MillLevels
+const Dkc3BgSet kBgMountain{
+    {}, {0x2A5F1C, 0, 0x2A426A}};  // TM/GFX_Layer2_MountainLevels
+const Dkc3BgSet kBgFactory{
+    {}, {0x29B0BD, 0, 0x2C576C, 0x1F60}};  // TM_Layer3_Factory + raw GFX_Layer2_Factory
 const Dkc3BgSet kBgDrain{
-    {}, {0x2A7D8A, 0x800, false, 0x2A68F2}};  // TM/GFX_Layer2_DrainPipeLevels
+    {}, {0x2A7D8A, 0x800, 0x2A68F2}};  // TM/GFX_Layer2_DrainPipeLevels
 const Dkc3BgSet kBgPier{
-    {},
-    {0x2591C9, 0, true, 0x254C41}};  // TM_Layer1_PierLevelWaterllineAndMountains
+    {}, {0x2591C9, 0, 0x254C41}};  // TM_Layer1_PierLevelWaterllineAndMountains
 
 const Dkc3BgSet& backgroundForStage(int id) {
     switch (id) {
-    case 0x44: case 0x45: case 0x46:  // Buzzer Barrage / Pot-Hole Panic / Creepy Caverns
-        return kBgCave;
+    case 0x25: case 0x26: case 0x27:  // lakeside / pier stages
+        return kBgPier;
+    case 0x28: case 0x29: case 0x2A:  // mill stages
+    case 0x47: case 0x48: case 0x49:  // mill stages (world 7)
+        return kBgMill;
     case 0x2E: case 0x2F: case 0x30: case 0x31:  // forest stages
         return kBgForest;
     case 0x32: case 0x33: case 0x34:  // riverbank stages
         return kBgRiver;
+    case 0x38: case 0x39: case 0x3A:  // factory stages (world 3)
+    case 0x3B: case 0x3C: case 0x3D:  // factory stages (world 6)
+        return kBgNone;               // art still being mapped
+    case 0x3E:                        // Low-G Labyrinth
+    case 0x41: case 0x42: case 0x43:  // mountain stages
+    case 0x4A: case 0x4B: case 0x4C:  // mountain stages (late)
+        return kBgMountain;
     case 0x3F: case 0x40:  // pipe stages
         return kBgDrain;
-    case 0x25: case 0x26: case 0x27:  // lakeside stages
-        return kBgPier;
+    case 0x35: case 0x36: case 0x37:  // reef stages (art still being mapped)
+        return kBgNone;
+    case 0x44: case 0x45: case 0x46:  // cave stages
+        return kBgCave;
     default:
         return kBgNone;
     }
@@ -113,6 +132,45 @@ Palette loadFgbgPalette(const Rom& rom, int paletteId) {
     return pal;
 }
 
+// Loads a background tilemap, trying the DKC3 tilemap format first and then
+// Big Data, Small Data and finally a raw 16-bit array.
+bool loadBackgroundMap(const Rom& rom, const Dkc3BgLayer& layer, std::vector<u16>& words) {
+    if (layer.map == 0 || !inRange(rom.data, layer.map, 16)) return false;
+    std::string error;
+    if (decompressTilemapDkc3(rom.data, layer.map, words, error) && !words.empty()) {
+        return true;
+    }
+    std::vector<u8> bytes;
+    if (decompress(DkFormat::BigData, rom.data, layer.map, bytes, error) &&
+        bytes.size() >= 64) {
+        words.resize(bytes.size() / 2);
+        for (std::size_t i = 0; i < words.size(); ++i) {
+            words[i] = static_cast<u16>(bytes[i * 2] | (bytes[i * 2 + 1] << 8));
+        }
+        return true;
+    }
+    bytes.clear();
+    error.clear();
+    if (decompress(DkFormat::SmallData, rom.data, layer.map, bytes, error) &&
+        bytes.size() >= 64) {
+        words.resize(bytes.size() / 2);
+        for (std::size_t i = 0; i < words.size(); ++i) {
+            words[i] = static_cast<u16>(bytes[i * 2] | (bytes[i * 2 + 1] << 8));
+        }
+        return true;
+    }
+    if (layer.mapSize >= 64) {
+        const std::size_t bytesCount = std::min<std::size_t>(layer.mapSize, rom.data.size());
+        if (!inRange(rom.data, layer.map, bytesCount)) return false;
+        words.resize(bytesCount / 2);
+        for (std::size_t i = 0; i < words.size(); ++i) {
+            words[i] = rd16(rom.data, layer.map + i * 2);
+        }
+        return true;
+    }
+    return false;
+}
+
 // Draws one background layer into an existing RGBA image.  Index-0 pixels stay
 // transparent so lower layers and the sky gradient show through.
 bool drawBackgroundLayer(const Rom& rom, const Dkc3BgLayer& layer, const Palette& palette,
@@ -120,21 +178,30 @@ bool drawBackgroundLayer(const Rom& rom, const Dkc3BgLayer& layer, const Palette
     if (layer.map == 0 || layer.gfx == 0) return false;
 
     std::vector<u16> words;
-    std::string error;
-    if (layer.mapCompressed) {
-        if (!decompressTilemapDkc3(rom.data, layer.map, words, error)) return false;
-    } else {
-        const std::size_t bytes = std::min<std::size_t>(layer.mapSize, rom.data.size());
-        if (bytes < 64 || !inRange(rom.data, layer.map, bytes)) return false;
-        words.resize(bytes / 2);
-        for (std::size_t i = 0; i < words.size(); ++i) {
-            words[i] = rd16(rom.data, layer.map + i * 2);
-        }
-    }
+    if (!loadBackgroundMap(rom, layer, words)) return false;
     if (words.size() < static_cast<std::size_t>(width)) return false;
 
+    std::string error;
     std::vector<u8> gfxData;
-    if (!decompress(DkFormat::BigData, rom.data, layer.gfx, gfxData, error)) return false;
+    bool gfxOk = false;
+    if (layer.gfxSize != 0) {
+        const std::size_t size = std::min<std::size_t>(layer.gfxSize, rom.data.size());
+        if (inRange(rom.data, layer.gfx, size)) {
+            gfxData.assign(rom.data.begin() + static_cast<std::ptrdiff_t>(layer.gfx),
+                           rom.data.begin() + static_cast<std::ptrdiff_t>(layer.gfx + size));
+            gfxOk = true;
+        }
+    } else {
+        gfxOk = decompress(DkFormat::BigData, rom.data, layer.gfx, gfxData, error) &&
+                gfxData.size() >= 32;
+        if (!gfxOk) {
+            gfxData.clear();
+            error.clear();
+            gfxOk = decompress(DkFormat::SmallData, rom.data, layer.gfx, gfxData, error) &&
+                    gfxData.size() >= 32;
+        }
+    }
+    if (!gfxOk) return false;
     const Charset charset = decodeCharset(gfxData);
     if (charset.chars.empty()) return false;
 
@@ -176,33 +243,52 @@ bool drawBackgroundLayer(const Rom& rom, const Dkc3BgLayer& layer, const Palette
 // Builds the background preview for a stage.  Returns false when the theme has
 // no decoded assets yet.  width/height are returned in pixels.
 bool buildBackground(const Rom& rom, int levelId, const Palette& palette,
-                     std::vector<u32>& image, int& width, int& height) {
+                     std::vector<u32>& image, int& width, int& height, bool& hasArt) {
     const Dkc3BgSet& set = backgroundForStage(levelId);
-    if (set.front.map == 0 && set.back.map == 0) return false;
 
     std::vector<u16> probe;
-    std::string error;
     int words = 0;
-    const Dkc3BgLayer& first = set.front.map ? set.front : set.back;
-    if (first.mapCompressed) {
-        if (!decompressTilemapDkc3(rom.data, first.map, probe, error)) return false;
+    hasArt = false;
+    if (set.front.map != 0 && loadBackgroundMap(rom, set.front, probe)) {
         words = static_cast<int>(probe.size());
-    } else {
-        words = static_cast<int>(std::min<std::size_t>(first.mapSize, rom.data.size()) / 2);
+        hasArt = words >= 32;
+    } else if (set.back.map != 0 && loadBackgroundMap(rom, set.back, probe)) {
+        words = static_cast<int>(probe.size());
+        hasArt = words >= 32;
     }
-    if (words < 32) return false;
+    if (!hasArt) words = 32 * 32;  // fall back to one gradient screen
 
     constexpr int kTileWidth = 32;
-    const int rows = words / kTileWidth;
+    const int rows = std::max(1, words / kTileWidth);
     const int pixelsW = kTileWidth * 8;
     int pixelsH = rows * 8;
     // The editor works in 32x32 cells, so pad the height to a whole cell.
     pixelsH += (32 - (pixelsH % 32)) % 32;
 
     image.assign(static_cast<std::size_t>(pixelsW) * pixelsH, 0);
-    // Sky gradient behind transparent parts.
-    const Color top{24, 44, 82, 255};
-    const Color bottom{96, 150, 204, 255};
+    // Themed sky gradient behind transparent parts.
+    Color top{24, 44, 82, 255};
+    Color bottom{96, 150, 204, 255};
+    if (levelId >= 0x2B && levelId <= 0x2D) {  // snow
+        top = Color{150, 176, 208, 255};
+        bottom = Color{238, 246, 255, 255};
+    } else if (levelId >= 0x35 && levelId <= 0x37) {  // reef
+        top = Color{8, 52, 78, 255};
+        bottom = Color{56, 156, 168, 255};
+    } else if (levelId >= 0x3F && levelId <= 0x40) {  // pipes
+        top = Color{28, 8, 40, 255};
+        bottom = Color{96, 44, 120, 255};
+    } else if (levelId >= 0x44 && levelId <= 0x46) {  // cave
+        top = Color{20, 12, 8, 255};
+        bottom = Color{70, 46, 34, 255};
+    } else if (levelId >= 0x28 && levelId <= 0x2A) {  // mill
+        top = Color{18, 14, 10, 255};
+        bottom = Color{80, 60, 40, 255};
+    } else if ((levelId >= 0x32 && levelId <= 0x34) ||
+               (levelId >= 0x2E && levelId <= 0x31)) {  // river / forest
+        top = Color{30, 60, 40, 255};
+        bottom = Color{120, 180, 120, 255};
+    }
     for (int y = 0; y < pixelsH; ++y) {
         const float t = pixelsH > 1 ? static_cast<float>(y) / (pixelsH - 1) : 0.0f;
         const Color c{static_cast<u8>(top.r + (bottom.r - top.r) * t),
@@ -213,11 +299,13 @@ bool buildBackground(const Rom& rom, int levelId, const Palette& palette,
         }
     }
 
-    drawBackgroundLayer(rom, set.back, palette, image, kTileWidth, pixelsH);
-    drawBackgroundLayer(rom, set.front, palette, image, kTileWidth, pixelsH);
+    if (hasArt) {
+        drawBackgroundLayer(rom, set.back, palette, image, kTileWidth, pixelsH);
+        drawBackgroundLayer(rom, set.front, palette, image, kTileWidth, pixelsH);
+    }
 
     // Repeat the backdrop horizontally so the canvas shows a level-wide view.
-    constexpr int kRepeat = 4;
+    constexpr int kRepeat = 2;
     std::vector<u32> wide(static_cast<std::size_t>(pixelsW) * kRepeat * pixelsH, 0);
     for (int y = 0; y < pixelsH; ++y) {
         for (int r = 0; r < kRepeat; ++r) {
@@ -285,14 +373,18 @@ bool Dkc3Game::loadLevel(Rom& rom, int levelId, LoadedLevel& out, std::string& e
     out.info.supported = true;
     out.background = Color{10, 12, 18, 255};
 
-    // Optional background preview (validated themes only).
+    // Optional background preview.  Every stage gets an image; themes whose
+    // art is not mapped yet receive a themed gradient instead.
     const int paletteId = rom.byte(a + 6);
     out.palette = loadFgbgPalette(rom, paletteId);
     int bgWidth = 0, bgHeight = 0;
-    if (buildBackground(rom, levelId, out.palette, out.image, bgWidth, bgHeight)) {
+    bool hasArt = false;
+    if (buildBackground(rom, levelId, out.palette, out.image, bgWidth, bgHeight, hasArt)) {
         out.width = bgWidth / 32;
         out.height = bgHeight / 32;
-        out.info.note = "Background preview only; DKC3 terrain editing is coming next.";
+        out.info.note = hasArt
+            ? "Background preview only; DKC3 terrain editing is coming next."
+            : "Themed backdrop; this stage's background art is still being mapped.";
     } else {
         out.info.note = "Visual DKC3 editing is not available for this stage yet.";
     }

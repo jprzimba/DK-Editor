@@ -295,8 +295,11 @@ Data:
   (`TM_Layer2_*`, `GFX_Layer2_*`, ... in the asset listing).
 - Backgrounds are drawn with the stage's `FGBG_*` palette. Tilesets are loaded at
   a VRAM character base that is recovered from the highest index used by the map.
-- Currently wired for cave, forest, riverbank, pipe and lakeside stages as a
-  read-only preview.
+- Map and tileset codecs differ per asset: the loader tries the DKC3 tilemap
+  format, then Big Data, then Small Data, then raw data.
+- Wired for lakeside, mill, forest, riverbank, mountain, pipe and cave stages.
+  Snow, factory and reef fall back to a themed gradient until their asset pair is
+  identified.
 
 ### DKC3 terrain
 
